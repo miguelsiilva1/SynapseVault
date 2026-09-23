@@ -17,6 +17,7 @@ export async function POST(req: Request) {
       audioKey,
       pdfKey,
       modelName,
+      outputLanguage,
     } = body;
 
     if (!courseName || !courseCode || !lectureTitle) {
@@ -38,7 +39,7 @@ export async function POST(req: Request) {
       (async () => {
         if (!audioKey) return { text: '', duration: 0 };
         const audioBuffer = await downloadFileAsBuffer(audioKey);
-        const transcription = await transcribeAudioStream(audioBuffer);
+        const transcription = await transcribeAudioStream(audioBuffer, 'lecture.mp3', outputLanguage || 'pt');
         return { text: transcription.text, duration: transcription.durationSeconds };
       })(),
       (async () => {
@@ -58,6 +59,7 @@ export async function POST(req: Request) {
       transcriptText: audioResult.text,
       slidesText: pdfResult.text,
       modelName,
+      outputLanguage: outputLanguage || 'pt',
     });
 
     return NextResponse.json({

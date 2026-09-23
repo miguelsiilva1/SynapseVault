@@ -8,6 +8,7 @@ export interface SynthesisParams {
   transcriptText: string;
   slidesText?: string;
   modelName?: string;
+  outputLanguage?: 'pt' | 'en';
 }
 
 export interface SynthesisResult {
@@ -25,11 +26,17 @@ export async function synthesizeObsidianNote(params: SynthesisParams): Promise<S
   }
 
   const ai = new GoogleGenAI({ apiKey });
-  const model = params.modelName || 'gemini-2.5-pro';
+  const model = params.modelName || 'gemini-3.8-flash';
+
+  const languageDirective = params.outputLanguage === 'pt'
+    ? 'TARGET LANGUAGE: Portuguese (Portugal / PT-PT). Write all titles, structural explanations, conceptual analyses, and callouts in clear academic Portuguese. Preserve international technical identifiers and code syntax unmodified.'
+    : 'TARGET LANGUAGE: English. Write the entire note in formal academic English.';
 
   const systemInstruction = `
 You are an expert academic knowledge compiler and university teaching assistant.
 Your task is to synthesize unstructured lecture transcripts and presentation slide texts into an authoritative, dense, and impeccably structured Obsidian Markdown note (.md).
+
+${languageDirective}
 
 Follow these strict constraints:
 1. FRONTMATTER: Begin immediately with clean YAML frontmatter containing:

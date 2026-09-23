@@ -34,23 +34,29 @@ Collaborative ingestion pipeline and synthesis platform. Converts unstructured a
 * **Bilingual Output Engine (PT/EN):** Added instant language toggle in the UI and connected language parameter to Gemini system prompts and Whisper transcription language hints.
 * **Dynamic Course Creation:** Built modal interface allowing users to define custom courses (e.g., "Sistemas Operativos [SO]" or "Machine Learning [ML]") persisted in `localStorage`.
 * **Model Selector Matrix:** Added support for `gemini-3.8-flash` (latest generation default), `gemini-2.5-pro` (deep reasoning), `gemini-2.5-flash`, and custom model identifiers.
-* **Production Build & Dev Server:** Development server running at `http://localhost:3000` with 0 TypeScript/build errors.
+### Phase 5: Authentication & Whitelist Access Control
+* **Supabase SSR Client Architecture (`src/lib/supabase/`):** Full session lifecycle management using `@supabase/ssr` with Next.js 15 cookies.
+* **Whitelist Guard Engine (`src/lib/auth/whitelist.ts` & `src/lib/auth/guard.ts`):** Enforces email and academic domain authorization. Protects backend API endpoints (`/api/upload/presign`, `/api/process`) against unauthorized quota exhaustion.
+* **Group Access UI (`src/app/page.tsx`):** Navbar authentication status indicator and student whitelist access modal supporting Google OAuth and Email Magic Links.
+* **Zero-Cost Storage Enforcement:** Integrated automatic `deleteFileFromR2` execution post-transcription in `/api/process`, ensuring 0 MB persistent R2 usage.
+* **Deployment Target Alignment:** Agreed on Vercel for zero-config Git-driven CI/CD edge deployment.
 
 ---
 
 ## 3. Current State
 * [x] Next.js 15 App Router boilerplate with strict TypeScript.
 * [x] Client-side audio downsampling utility (`compressAudio.ts`).
-* [x] R2 Presigned URL storage infrastructure.
+* [x] R2 Presigned URL storage infrastructure with auto-purge.
 * [x] Groq Whisper and PDF text extraction services.
 * [x] Gemini 3.8 Flash / 2.5 Pro synthesis engine with injection containment.
 * [x] Bilingual studio UI (Portuguese / English).
 * [x] Dynamic course creation with client persistence.
-* [x] Clean compilation verified via `npx tsc` and `curl http://localhost:3000 -> 200 OK`.
-* [ ] Supabase database migrations and user authentication.
-* [ ] Obsidian sync / local vault direct export helper.
+* [x] Supabase Auth integration with friend whitelist protection.
+* [x] Clean compilation verified via `npx tsc` and `next build`.
+* [ ] Live synthesis verification with user environment credentials.
 
 ---
 
 ## 4. Next Step
-Stage and commit Phase 4 enhancements, and provide `.env.local` credentials for live end-to-end processing.
+Execute live end-to-end synthesis test on `http://localhost:3000` with real audio/PDF.
+

@@ -1,13 +1,22 @@
 import { NextResponse } from 'next/server';
-import { downloadFileAsBuffer } from '@/lib/storage/r2';
+import { downloadFileAsBuffer, deleteFileFromR2 } from '@/lib/storage/r2';
 import { transcribeAudioStream } from '@/lib/ai/groq';
 import { extractPdfText } from '@/lib/pdf/extractText';
 import { synthesizeObsidianNote } from '@/lib/ai/gemini';
+import { enforceAuthGuard } from '@/lib/auth/guard';
 
 export const maxDuration = 120; // Allow 2-minute server execution for large academic jobs
 
 export async function POST(req: Request) {
+  let activeAudioKey: string | undefined;
+  let activePdfKey: string | undefined;
+
   try {
+    const auth = await enforceAuthGuard();
+    if (!auth.authorized && auth.response) {
+      return auth.response;
+    }
+
     const body = await req.json();
     const {
       courseName,
@@ -19,6 +28,9 @@ export async function POST(req: Request) {
       modelName,
       outputLanguage,
     } = body;
+
+    activeAudioKey = audioKey;
+    activePdfKey = pdfKey;
 
     if (!courseName || !courseCode || !lectureTitle) {
       return NextResponse.json(
@@ -50,7 +62,13 @@ export async function POST(req: Request) {
       })(),
     ]);
 
-    // Step 2: Dispatch consolidated payload to Gemini Pro
+    // Step 2: Auto-purge raw binaries from Cloudflare R2 immediately to enforce 0 MB persistent storage
+    await Promise.allSettled([
+      activeAudioKey ? deleteFileFromR2(activeAudioKey) : Promise.resolve(),
+      activePdfKey ? deleteFileFromR2(activePdfKey) : Promise.resolve(),
+    ]);
+
+    // Step 3: Dispatch consolidated payload to Gemini
     const synthesis = await synthesizeObsidianNote({
       courseName,
       courseCode,
@@ -74,6 +92,14 @@ export async function POST(req: Request) {
       },
     });
   } catch (error) {
+    // Ensure cleanup even on pipeline error
+    if (activeAudioKey || activePdfKey) {
+      await Promise.allSettled([
+        activeAudioKey ? deleteFileFromR2(activeAudioKey) : Promise.resolve(),
+        activePdfKey ? deleteFileFromR2(activePdfKey) : Promise.resolve(),
+      ]);
+    }
+
     const message = error instanceof Error ? error.message : 'Pipeline orchestration failed.';
     return NextResponse.json({ error: message }, { status: 500 });
   }

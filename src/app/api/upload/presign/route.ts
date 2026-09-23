@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { generatePresignedUploadUrl } from '@/lib/storage/r2';
+import { enforceAuthGuard } from '@/lib/auth/guard';
 
 const ALLOWED_MIME_TYPES = new Set([
   'audio/mp3',
@@ -16,6 +17,11 @@ const MAX_DECLARED_SIZE_BYTES = 100 * 1024 * 1024; // 100 MB max threshold
 
 export async function POST(req: Request) {
   try {
+    const auth = await enforceAuthGuard();
+    if (!auth.authorized && auth.response) {
+      return auth.response;
+    }
+
     const body = await req.json();
     const { fileName, fileType, fileSize, courseId } = body;
 

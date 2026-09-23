@@ -1,4 +1,4 @@
-import { S3Client, PutObjectCommand, GetObjectCommand } from '@aws-sdk/client-s3';
+import { S3Client, PutObjectCommand, GetObjectCommand, DeleteObjectCommand } from '@aws-sdk/client-s3';
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 
 const accountId = process.env.CLOUDFLARE_ACCOUNT_ID;
@@ -64,3 +64,21 @@ export async function downloadFileAsBuffer(key: string): Promise<ArrayBuffer> {
   new Uint8Array(buffer).set(byteArray);
   return buffer;
 }
+
+/**
+ * Deletes a stored file from Cloudflare R2 immediately after synthesis to enforce zero storage costs.
+ */
+export async function deleteFileFromR2(key: string): Promise<void> {
+  if (!key) return;
+  try {
+    const client = getR2Client();
+    const command = new DeleteObjectCommand({
+      Bucket: bucketName,
+      Key: key,
+    });
+    await client.send(command);
+  } catch (err) {
+    console.error(`Failed to delete object "${key}" from R2:`, err);
+  }
+}
+

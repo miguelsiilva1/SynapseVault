@@ -16,8 +16,13 @@ import {
   Globe,
   Settings,
   X,
+  User,
+  LogIn,
+  LogOut,
+  ShieldCheck,
 } from 'lucide-react';
 import { compressAudio } from '@/lib/audio/compressAudio';
+import { createClient } from '@/lib/supabase/client';
 
 interface CourseOption {
   id: string;
@@ -73,7 +78,13 @@ export default function Home() {
   const [synthesizedMarkdown, setSynthesizedMarkdown] = useState<string | null>(null);
   const [copied, setCopied] = useState<boolean>(false);
 
-  // Load custom courses from localStorage
+  // Auth State
+  const [currentUser, setCurrentUser] = useState<{ email?: string } | null>(null);
+  const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
+  const [authEmailInput, setAuthEmailInput] = useState('');
+  const [authMessage, setAuthMessage] = useState('');
+
+  // Load custom courses from localStorage and subscribe to Supabase Auth
   useEffect(() => {
     try {
       const saved = localStorage.getItem('synapse_custom_courses');
@@ -87,7 +98,67 @@ export default function Home() {
     } catch (e) {
       console.error('Failed to load courses from localStorage', e);
     }
+
+    try {
+      const supabase = createClient();
+      supabase.auth.getUser().then(({ data: { user } }) => {
+        if (user) setCurrentUser({ email: user.email });
+      });
+
+      const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+        setCurrentUser(session?.user ? { email: session.user.email } : null);
+      });
+
+      return () => subscription.unsubscribe();
+    } catch (e) {
+      console.error('Supabase auth initialization skipped in local mode', e);
+    }
   }, []);
+
+  const handleGoogleSignIn = async () => {
+    try {
+      const supabase = createClient();
+      await supabase.auth.signInWithOAuth({
+        provider: 'google',
+        options: { redirectTo: `${window.location.origin}/auth/callback` },
+      });
+    } catch (err) {
+      setAuthMessage(err instanceof Error ? err.message : 'OAuth sign-in failed.');
+    }
+  };
+
+  const handleMagicLinkSignIn = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!authEmailInput.trim()) return;
+    try {
+      const supabase = createClient();
+      const { error } = await supabase.auth.signInWithOtp({
+        email: authEmailInput.trim(),
+        options: { emailRedirectTo: `${window.location.origin}/auth/callback` },
+      });
+      if (error) {
+        setAuthMessage(error.message);
+      } else {
+        setAuthMessage(
+          outputLanguage === 'pt'
+            ? 'Link de acesso enviado! Verifica a tua caixa de correio.'
+            : 'Magic sign-in link dispatched. Check your inbox.'
+        );
+      }
+    } catch (err) {
+      setAuthMessage(err instanceof Error ? err.message : 'OTP dispatch failed.');
+    }
+  };
+
+  const handleSignOut = async () => {
+    try {
+      const supabase = createClient();
+      await supabase.auth.signOut();
+      setCurrentUser(null);
+    } catch (e) {
+      console.error('Sign out error', e);
+    }
+  };
 
   const activeModelName = modelPreset === 'custom' ? customModelId.trim() || 'gemini-3.8-flash' : modelPreset;
 
@@ -446,6 +517,29 @@ $$
               ))}
             </select>
           </div>
+
+          {/* User Authentication Status */}
+          {currentUser ? (
+            <div className="flex items-center space-x-2 bg-slate-900 border border-slate-800 rounded-lg px-2.5 py-1 text-xs">
+              <User className="w-3.5 h-3.5 text-emerald-400" />
+              <span className="text-slate-300 max-w-[140px] truncate">{currentUser.email}</span>
+              <button
+                onClick={handleSignOut}
+                title={outputLanguage === 'pt' ? 'Terminar Sessão' : 'Sign Out'}
+                className="text-slate-400 hover:text-rose-400 transition-colors ml-1"
+              >
+                <LogOut className="w-3.5 h-3.5" />
+              </button>
+            </div>
+          ) : (
+            <button
+              onClick={() => setIsAuthModalOpen(true)}
+              className="flex items-center space-x-1.5 bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-medium px-3 py-1.5 rounded-lg transition-colors shadow-sm"
+            >
+              <LogIn className="w-3.5 h-3.5" />
+              <span>{outputLanguage === 'pt' ? 'Entrar' : 'Sign In'}</span>
+            </button>
+          )}
         </div>
       </header>
 
@@ -785,6 +879,101 @@ $$
                   {outputLanguage === 'pt' ? 'Salvar Cadeira' : 'Save Course'}
                 </button>
               </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Modal: Student Whitelist Authentication */}
+      {isAuthModalOpen && (
+        <div className="fixed inset-0 z-50 bg-black/75 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-[#0f172a] border border-slate-800 rounded-xl p-6 max-w-md w-full shadow-2xl space-y-4">
+            <div className="flex items-center justify-between border-b border-slate-800 pb-3">
+              <div className="flex items-center space-x-2">
+                <ShieldCheck className="w-5 h-5 text-indigo-400" />
+                <h3 className="text-sm font-bold text-white">
+                  {outputLanguage === 'pt' ? 'Acesso ao SynapseVault' : 'SynapseVault Group Access'}
+                </h3>
+              </div>
+              <button
+                onClick={() => {
+                  setIsAuthModalOpen(false);
+                  setAuthMessage('');
+                }}
+                className="text-slate-400 hover:text-white transition-colors"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <p className="text-xs text-slate-400 leading-relaxed">
+              {outputLanguage === 'pt'
+                ? 'Plataforma restrita ao grupo de estudo da faculdade. Apenas emails autorizados na lista de alunos têm permissão de síntese.'
+                : 'Platform restricted to approved university study members. Only whitelisted student emails can trigger synthesis.'}
+            </p>
+
+            {/* Google OAuth Button */}
+            <button
+              onClick={handleGoogleSignIn}
+              className="w-full py-2.5 px-4 bg-white hover:bg-slate-100 text-slate-900 text-xs font-semibold rounded-lg flex items-center justify-center space-x-2 transition-colors shadow-sm"
+            >
+              <svg className="w-4 h-4" viewBox="0 0 24 24">
+                <path
+                  fill="#4285F4"
+                  d="M23.745 12.27c0-.7-.06-1.4-.19-2.07H12v4.51h6.6c-.29 1.52-1.14 2.8-2.4 3.66v3.05h3.88c2.27-2.09 3.665-5.17 3.665-9.15z"
+                />
+                <path
+                  fill="#34A853"
+                  d="M12 24c3.24 0 5.95-1.08 7.93-2.91l-3.88-3.05c-1.08.72-2.45 1.16-4.05 1.16-3.12 0-5.77-2.1-6.72-4.93H1.24v3.15C3.26 21.36 7.33 24 12 24z"
+                />
+                <path
+                  fill="#FBBC05"
+                  d="M5.28 14.27c-.25-.72-.38-1.49-.38-2.27s.13-1.55.38-2.27V6.58H1.24C.45 8.15 0 9.99 0 12s.45 3.85 1.24 5.42l4.04-3.15z"
+                />
+                <path
+                  fill="#EA4335"
+                  d="M12 4.75c1.77 0 3.35.61 4.6 1.8l3.42-3.42C17.95 1.19 15.24 0 12 0 7.33 0 3.26 2.64 1.24 6.58l4.04 3.15c.95-2.83 3.6-4.98 6.72-4.98z"
+                />
+              </svg>
+              <span>{outputLanguage === 'pt' ? 'Entrar com Conta Google' : 'Sign In with Google'}</span>
+            </button>
+
+            <div className="flex items-center my-3">
+              <div className="flex-1 border-t border-slate-800" />
+              <span className="px-2 text-[10px] uppercase text-slate-500 font-mono tracking-wider">
+                {outputLanguage === 'pt' ? 'ou email' : 'or email'}
+              </span>
+              <div className="flex-1 border-t border-slate-800" />
+            </div>
+
+            {/* Magic Link Form */}
+            <form onSubmit={handleMagicLinkSignIn} className="space-y-3">
+              <div>
+                <label className="block text-xs font-medium text-slate-300 mb-1">
+                  {outputLanguage === 'pt' ? 'Email Universitário / Pessoal' : 'Student / University Email'}
+                </label>
+                <input
+                  type="email"
+                  placeholder="aluno@universidade.pt"
+                  value={authEmailInput}
+                  onChange={(e) => setAuthEmailInput(e.target.value)}
+                  className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                  required
+                />
+              </div>
+
+              {authMessage && (
+                <div className="text-xs text-indigo-300 bg-indigo-950/40 border border-indigo-900/50 rounded-lg p-2.5">
+                  {authMessage}
+                </div>
+              )}
+
+              <button
+                type="submit"
+                className="w-full py-2 bg-indigo-600 hover:bg-indigo-500 text-xs font-medium text-white rounded-lg transition-colors shadow-sm"
+              >
+                {outputLanguage === 'pt' ? 'Enviar Link de Acesso (Magic Link)' : 'Send Magic Access Link'}
+              </button>
             </form>
           </div>
         </div>

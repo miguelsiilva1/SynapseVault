@@ -18,27 +18,30 @@ Collaborative ingestion pipeline and synthesis platform. Converts unstructured a
 * Formulated threat model: Presigned upload URLs, MIME sniffing, per-user token rate limiting, and PostgreSQL Row-Level Security (RLS).
 
 ### Phase 2: Repository Initialization & Tooling
-* Project root created at `/Users/miguelsiilva1/Developer/Pessoal/SynapseVault`.
 * Base stack configured: Next.js 15+ (App Router), React 19, TypeScript, Tailwind CSS.
-* Agent files (`AGENTS.md`, `CLAUDE.md`) untracked and quarantined in `.gitignore`.
-* Multi-tier documentation initialized:
-  * `SUMMARY.md`: High-level progress log.
-  * `ARCHITECTURE.md`: Low-level engineering specifications and data contracts.
-  * `README.md`: Public repository entry point.
+
+### Phase 3: Core Pipeline & Studio UI Implementation
+* **Audio Optimization Engine (`src/lib/audio/compressAudio.ts`):** Client-side Web Audio API pipeline downsampling to 16kHz mono, quantized to Int16, and encoded via LameJS MP3 frame streamer. Includes thread-yielding execution and real-time progress callbacks.
+* **Storage Ingestion (`src/lib/storage/r2.ts` & `src/app/api/upload/presign/route.ts`):** Presigned PUT URL generator for direct-to-R2 binary upload, enforcing MIME validation and a 100MB safety ceiling.
+* **Text & Audio Processing (`src/lib/pdf/extractText.ts` & `src/lib/ai/groq.ts`):** Server-side PDF digital text extraction (via `unpdf`) and speech-to-text transcription via Groq Whisper (`whisper-large-v3-turbo`).
+* **Semantic Synthesis Engine (`src/lib/ai/gemini.ts` & `src/app/api/process/route.ts`):** Gemini Pro/Flash prompt orchestration enforcing YAML frontmatter, KaTeX math blocks, semantic callouts, and prompt injection isolation boundaries.
+* **Academic Studio Interface (`src/app/page.tsx`):** Ingestion workspace with metadata inputs, audio and PDF dropzones, live compression progress tracking, model selector, and Obsidian Markdown export/copy viewer.
+* **Production Build Verified:** Clean Turbopack production compilation (`next build`) with 0 errors.
 
 ---
 
 ## 3. Current State
-* [x] Next.js 15 App Router boilerplate deployed with TypeScript and Tailwind CSS.
-* [x] Git repository configured with clean exclusions.
-* [x] Core documentation compiled in English.
-* [ ] Install production dependencies (`lucide-react`, `@breezystack/lamejs`, `@aws-sdk/client-s3`, `@aws-sdk/s3-request-presigner`).
-* [ ] Implement client-side audio compression utility (`src/lib/audio/compressAudio.ts`).
-* [ ] Implement direct-to-R2 upload endpoint (`src/app/api/upload/route.ts`).
-* [ ] Deploy Supabase DDL migrations and seed schemas.
-* [ ] Build responsive UI for course selection and multi-file drag-and-drop.
+* [x] Next.js 15 App Router boilerplate with strict TypeScript.
+* [x] Client-side audio downsampling utility (`compressAudio.ts`).
+* [x] R2 Presigned URL storage infrastructure.
+* [x] Groq Whisper and PDF text extraction services.
+* [x] Gemini Pro/Flash synthesis engine with injection containment.
+* [x] Single-page academic studio UI.
+* [x] Clean compilation verified via `npx tsc` and `next build`.
+* [ ] Supabase database migrations and user authentication.
+* [ ] Obsidian sync / local vault direct export helper.
 
 ---
 
 ## 4. Next Step
-Install core runtime dependencies and implement `compressAudio.ts` with Web Worker support to prevent UI thread blocking.
+Connect environment credentials (`.env.local`) to test end-to-end ingestion and synthesis with real audio and slides.

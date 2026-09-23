@@ -44,3 +44,7 @@ next-env.d.ts
 # local agent files
 AGENTS.md
 CLAUDE.md
+
+# local personal study notes
+ESTUDO_ARQUITETURA.md
+*ESTUDO*.md

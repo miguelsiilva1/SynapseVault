@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { createServerSupabaseClient } from '@/lib/supabase/server';
-import { isUserAuthorized } from './whitelist';
+import { isUserAuthorized, isUserAdmin } from './whitelist';
 
 export interface AuthGuardResult {
   authorized: boolean;
@@ -57,3 +57,26 @@ export async function enforceAuthGuard(): Promise<AuthGuardResult> {
     email: user.email,
   };
 }
+
+/**
+ * Enforces admin authorization. Returns 403 if the user is not an administrator.
+ */
+export async function enforceAdminGuard(): Promise<AuthGuardResult> {
+  const auth = await enforceAuthGuard();
+  if (!auth.authorized) {
+    return auth;
+  }
+
+  if (!isUserAdmin(auth.email)) {
+    return {
+      authorized: false,
+      response: NextResponse.json(
+        { error: 'Forbidden. Administrator privileges required.' },
+        { status: 403 }
+      ),
+    };
+  }
+
+  return auth;
+}
+

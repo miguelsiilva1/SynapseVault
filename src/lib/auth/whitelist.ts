@@ -50,3 +50,22 @@ export function isUserAuthorized(email?: string | null): WhitelistCheckResult {
     reason: `Access denied. Email "${normalizedEmail}" is not in the authorized study group whitelist.`,
   };
 }
+
+/**
+ * Validates whether an email address belongs to an authorized platform administrator.
+ */
+export function isUserAdmin(email?: string | null): boolean {
+  if (!email) return false;
+  const normalizedEmail = email.trim().toLowerCase();
+  const rawAdminEmails =
+    process.env.NEXT_PUBLIC_ADMIN_EMAILS ||
+    process.env.ADMIN_EMAILS ||
+    'miguelricasilva@gmail.com,miguelangelorsilva1@gmail.com';
+  const admins = rawAdminEmails
+    .split(',')
+    .map((e) => e.trim().toLowerCase())
+    .filter(Boolean);
+  return admins.includes(normalizedEmail);
+
+}
+

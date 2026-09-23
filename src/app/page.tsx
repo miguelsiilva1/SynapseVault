@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
+import Link from 'next/link';
 import {
   FileAudio,
   FileText,
@@ -14,36 +15,37 @@ import {
   Zap,
   Plus,
   Globe,
-  Settings,
   X,
   User,
-  LogIn,
   LogOut,
   ShieldCheck,
+  Activity,
 } from 'lucide-react';
 import { compressAudio } from '@/lib/audio/compressAudio';
 import { createClient } from '@/lib/supabase/client';
+import { isUserAdmin } from '@/lib/auth/whitelist';
 
 interface CourseOption {
   id: string;
   name: string;
+  nameEn?: string;
   code: string;
 }
 
 const DEFAULT_COURSES: CourseOption[] = [
-  { id: '1', name: 'Sistemas Distribuídos', code: 'SD' },
-  { id: '2', name: 'Sistemas Operativos', code: 'SO' },
-  { id: '3', name: 'Redes de Computadores', code: 'RC' },
-  { id: '4', name: 'Algoritmos e Estruturas de Dados', code: 'AED' },
-  { id: '5', name: 'Bases de Dados', code: 'BD' },
-  { id: '6', name: 'Distributed Systems', code: 'DS' },
-  { id: '7', name: 'Machine Learning', code: 'ML' },
+  { id: '1', name: 'Administração de Sistemas', nameEn: 'Systems Administration', code: 'ASSIST' },
+  { id: '2', name: 'Gestão', nameEn: 'Management', code: 'GESTA' },
+  { id: '3', name: 'Redes e Sistemas de Comunicações', nameEn: 'Networks and Communication Systems', code: 'REDSC' },
+  { id: '4', name: 'Segurança Informática', nameEn: 'Computer Security', code: 'SEINF' },
+  { id: '5', name: 'Sistemas Distribuídos', nameEn: 'Distributed Systems', code: 'SIDIS' },
+  { id: '6', name: 'Sistemas Gráficos e Interação', nameEn: 'Computer Graphics and Interaction', code: 'SGRAI' },
+  { id: '7', name: 'Telecomunicações na Aeronáutica', nameEn: 'Aeronautical Telecommunications', code: 'STAER' },
+  { id: '8', name: 'Vibração e Ondas', nameEn: 'Vibrations and Waves', code: 'VIBON' },
 ];
 
 const AVAILABLE_MODELS = [
-  { id: 'gemini-3.8-flash', label: 'Gemini 3.8 Flash (Latest)', tag: 'Recommended' },
-  { id: 'gemini-2.5-pro', label: 'Gemini 2.5 Pro (Deep Reasoning)', tag: 'Pro' },
-  { id: 'gemini-2.5-flash', label: 'Gemini 2.5 Flash', tag: 'Fast' },
+  { id: 'gemini-3.6-flash', label: 'Gemini 3.6 Flash (Fast & Stable)', tag: 'Recommended' },
+  { id: 'gemini-3.8-flash', label: 'Gemini 3.8 Flash (Latest Preview)', tag: 'Latest' },
   { id: 'custom', label: 'Custom Model ID...', tag: 'Advanced' },
 ];
 
@@ -55,7 +57,7 @@ export default function Home() {
   const [outputLanguage, setOutputLanguage] = useState<'pt' | 'en'>('pt');
 
   // Model Selection
-  const [modelPreset, setModelPreset] = useState<string>('gemini-3.8-flash');
+  const [modelPreset, setModelPreset] = useState<string>('gemini-3.6-flash');
   const [customModelId, setCustomModelId] = useState<string>('');
 
   // Course Creation Modal State
@@ -69,6 +71,7 @@ export default function Home() {
   const [pdfFile, setPdfFile] = useState<File | null>(null);
 
   // Compression & Upload State
+  const [isCompressing, setIsCompressing] = useState<boolean>(false);
   const [compressionProgress, setCompressionProgress] = useState<number | null>(null);
   const [statusMessage, setStatusMessage] = useState<string>('');
   const [isProcessing, setIsProcessing] = useState<boolean>(false);
@@ -76,42 +79,88 @@ export default function Home() {
 
   // Output State
   const [synthesizedMarkdown, setSynthesizedMarkdown] = useState<string | null>(null);
+  const [lastSynthesizedKey, setLastSynthesizedKey] = useState<string | null>(null);
   const [copied, setCopied] = useState<boolean>(false);
 
   // Auth State
   const [currentUser, setCurrentUser] = useState<{ email?: string } | null>(null);
-  const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
+  const [authLoading, setAuthLoading] = useState(true);
   const [authEmailInput, setAuthEmailInput] = useState('');
   const [authMessage, setAuthMessage] = useState('');
 
   // Load custom courses from localStorage and subscribe to Supabase Auth
   useEffect(() => {
+    const LEGACY_MOCK_CODES = new Set(['SD', 'SO', 'RC', 'AED', 'BD', 'DS', 'ML']);
+    let initialCourses = [...DEFAULT_COURSES];
+
     try {
       const saved = localStorage.getItem('synapse_custom_courses');
       if (saved) {
         const parsed = JSON.parse(saved);
-        if (Array.isArray(parsed) && parsed.length > 0) {
-          setCourses(parsed);
-          setSelectedCourse(parsed[0]);
+        if (Array.isArray(parsed)) {
+          const customOnly = parsed.filter(
+            (p: CourseOption) =>
+              p.code &&
+              !DEFAULT_COURSES.some((d) => d.code === p.code) &&
+              !LEGACY_MOCK_CODES.has(p.code)
+          );
+          initialCourses = [...DEFAULT_COURSES, ...customOnly];
+          localStorage.setItem('synapse_custom_courses', JSON.stringify(initialCourses));
         }
       }
     } catch (e) {
       console.error('Failed to load courses from localStorage', e);
     }
 
+    setCourses(initialCourses);
+    setSelectedCourse(initialCourses[0]);
+
     try {
       const supabase = createClient();
-      supabase.auth.getUser().then(({ data: { user } }) => {
-        if (user) setCurrentUser({ email: user.email });
-      });
+      (async () => {
+        try {
+          const { data } = await supabase.from('courses').select('*').order('name');
+          if (data && data.length > 0) {
+            const courseMap = new Map<string, CourseOption>();
+            for (const d of DEFAULT_COURSES) {
+              courseMap.set(d.code, d);
+            }
+            for (const c of data) {
+              const def = DEFAULT_COURSES.find((d) => d.code === c.code);
+              courseMap.set(c.code, {
+                id: c.id,
+                name: c.name,
+                nameEn: def?.nameEn,
+                code: c.code,
+              });
+            }
+            const unique = Array.from(courseMap.values());
+            setCourses(unique);
+            setSelectedCourse(unique[0]);
+          }
+        } catch (e) {
+          console.warn('Failed to load courses from Supabase', e);
+        }
+      })();
+      supabase.auth
+        .getUser()
+        .then(({ data: { user } }) => {
+          if (user) setCurrentUser({ email: user.email });
+          setAuthLoading(false);
+        })
+        .catch(() => setAuthLoading(false));
 
-      const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      const {
+        data: { subscription },
+      } = supabase.auth.onAuthStateChange((_event, session) => {
         setCurrentUser(session?.user ? { email: session.user.email } : null);
+        setAuthLoading(false);
       });
 
       return () => subscription.unsubscribe();
     } catch (e) {
       console.error('Supabase auth initialization skipped in local mode', e);
+      setAuthLoading(false);
     }
   }, []);
 
@@ -123,7 +172,19 @@ export default function Home() {
         options: { redirectTo: `${window.location.origin}/auth/callback` },
       });
     } catch (err) {
-      setAuthMessage(err instanceof Error ? err.message : 'OAuth sign-in failed.');
+      setAuthMessage(err instanceof Error ? err.message : 'Google sign-in failed.');
+    }
+  };
+
+  const handleGitHubSignIn = async () => {
+    try {
+      const supabase = createClient();
+      await supabase.auth.signInWithOAuth({
+        provider: 'github',
+        options: { redirectTo: `${window.location.origin}/auth/callback` },
+      });
+    } catch (err) {
+      setAuthMessage(err instanceof Error ? err.message : 'GitHub sign-in failed.');
     }
   };
 
@@ -189,6 +250,7 @@ export default function Home() {
     setAudioFile(file);
     setCompressedAudio(null);
     setErrorMessage(null);
+    setIsCompressing(true);
     setCompressionProgress(0);
     setStatusMessage(
       outputLanguage === 'pt'
@@ -221,6 +283,8 @@ export default function Home() {
           : 'Audio compression failed. File may be unreadable or format unsupported.'
       );
       setCompressionProgress(null);
+    } finally {
+      setIsCompressing(false);
     }
   };
 
@@ -233,38 +297,61 @@ export default function Home() {
   };
 
   const uploadToStorage = async (file: File, type: string): Promise<string> => {
-    const presignRes = await fetch('/api/upload/presign', {
+    // Attempt 1: Direct presigned streaming to Cloudflare R2
+    try {
+      const presignRes = await fetch('/api/upload/presign', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          fileName: file.name,
+          fileType: file.type || type,
+          fileSize: file.size,
+          courseId: selectedCourse.code.toLowerCase(),
+        }),
+      });
+
+      if (presignRes.ok) {
+        const { uploadUrl, fileKey } = await presignRes.json();
+
+        const uploadRes = await fetch(uploadUrl, {
+          method: 'PUT',
+          headers: { 'Content-Type': file.type || type },
+          body: file,
+        });
+
+        if (uploadRes.ok) {
+          return fileKey;
+        }
+      }
+    } catch (err) {
+      console.warn('Direct R2 presigned upload failed or blocked by CORS. Using server relay fallback:', err);
+    }
+
+    // Attempt 2: Server-side relay fallback (bypasses browser CORS completely)
+    const formData = new FormData();
+    formData.append('file', file);
+    formData.append('courseId', selectedCourse.code.toLowerCase());
+
+    const directRes = await fetch('/api/upload/direct', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        fileName: file.name,
-        fileType: file.type || type,
-        fileSize: file.size,
-        courseId: selectedCourse.code.toLowerCase(),
-      }),
+      body: formData,
     });
 
-    if (!presignRes.ok) {
-      const errorData = await presignRes.json();
-      throw new Error(errorData.error || 'Failed to acquire presigned upload URL.');
+    if (!directRes.ok) {
+      const errorData = await directRes.json().catch(() => ({}));
+      throw new Error(errorData.error || `Upload failed with status ${directRes.status}.`);
     }
 
-    const { uploadUrl, fileKey } = await presignRes.json();
-
-    const uploadRes = await fetch(uploadUrl, {
-      method: 'PUT',
-      headers: { 'Content-Type': file.type || type },
-      body: file,
-    });
-
-    if (!uploadRes.ok) {
-      throw new Error(`Direct binary upload to R2 storage failed (${uploadRes.status}).`);
-    }
-
+    const { fileKey } = await directRes.json();
     return fileKey;
   };
 
+  const currentInputKey = `${selectedCourse.code}_${lectureTitle.trim()}_${audioFile?.name || ''}_${audioFile?.size || 0}_${pdfFile?.name || ''}_${pdfFile?.size || 0}_${outputLanguage}_${activeModelName}`;
+  const isAlreadySynthesized = Boolean(lastSynthesizedKey && lastSynthesizedKey === currentInputKey && synthesizedMarkdown);
+
   const handleStartPipeline = async () => {
+    if (isProcessing || isCompressing || isAlreadySynthesized) return;
+
     if (!lectureTitle.trim()) {
       setErrorMessage(outputLanguage === 'pt' ? 'Indica o título da aula / tópico.' : 'Please specify a lecture title.');
       return;
@@ -308,7 +395,7 @@ export default function Home() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          courseName: selectedCourse.name,
+          courseName: outputLanguage === 'en' ? (selectedCourse.nameEn || selectedCourse.name) : selectedCourse.name,
           courseCode: selectedCourse.code,
           lectureTitle,
           lectureDate,
@@ -326,6 +413,7 @@ export default function Home() {
 
       const result = await processRes.json();
       setSynthesizedMarkdown(result.markdown);
+      setLastSynthesizedKey(currentInputKey);
       setStatusMessage(outputLanguage === 'pt' ? 'Síntese concluída com sucesso!' : 'Synthesis complete.');
     } catch (err) {
       console.error(err);
@@ -461,6 +549,19 @@ $$
     }
   };
 
+  if (authLoading) {
+    return (
+      <div className="min-h-screen bg-[#090d16] flex items-center justify-center text-slate-400 font-sans">
+        <div className="flex flex-col items-center space-y-3">
+          <div className="w-6 h-6 border-2 border-indigo-500 border-t-transparent rounded-full animate-spin" />
+          <span className="text-xs font-mono uppercase tracking-wider text-slate-500">
+            {outputLanguage === 'pt' ? 'A verificar sessão académica...' : 'Verifying session...'}
+          </span>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen bg-[#090d16] text-slate-100 flex flex-col font-sans">
       {/* Top Navbar */}
@@ -502,49 +603,54 @@ $$
             </button>
           </div>
 
-          {/* Model Selector Dropdown */}
-          <div className="flex items-center bg-slate-900 border border-slate-800 rounded-lg p-1 text-xs">
-            <Sparkles className="w-3.5 h-3.5 text-indigo-400 ml-2 mr-1" />
-            <select
-              value={modelPreset}
-              onChange={(e) => setModelPreset(e.target.value)}
-              className="bg-transparent text-slate-200 text-xs font-medium focus:outline-none pr-2 py-1 cursor-pointer"
-            >
-              {AVAILABLE_MODELS.map((m) => (
-                <option key={m.id} value={m.id} className="bg-slate-900 text-white">
-                  {m.label}
-                </option>
-              ))}
-            </select>
-          </div>
+          {/* Model Selector & User Status (Only displayed when authenticated) */}
+          {currentUser && (
+            <>
+              <div className="flex items-center bg-slate-900 border border-slate-800 rounded-lg p-1 text-xs">
+                <Sparkles className="w-3.5 h-3.5 text-indigo-400 ml-2 mr-1" />
+                <select
+                  value={modelPreset}
+                  onChange={(e) => setModelPreset(e.target.value)}
+                  className="bg-transparent text-slate-200 text-xs font-medium focus:outline-none pr-2 py-1 cursor-pointer"
+                >
+                  {AVAILABLE_MODELS.map((m) => (
+                    <option key={m.id} value={m.id} className="bg-slate-900 text-white">
+                      {m.label}
+                    </option>
+                  ))}
+                </select>
+              </div>
 
-          {/* User Authentication Status */}
-          {currentUser ? (
-            <div className="flex items-center space-x-2 bg-slate-900 border border-slate-800 rounded-lg px-2.5 py-1 text-xs">
-              <User className="w-3.5 h-3.5 text-emerald-400" />
-              <span className="text-slate-300 max-w-[140px] truncate">{currentUser.email}</span>
-              <button
-                onClick={handleSignOut}
-                title={outputLanguage === 'pt' ? 'Terminar Sessão' : 'Sign Out'}
-                className="text-slate-400 hover:text-rose-400 transition-colors ml-1"
-              >
-                <LogOut className="w-3.5 h-3.5" />
-              </button>
-            </div>
-          ) : (
-            <button
-              onClick={() => setIsAuthModalOpen(true)}
-              className="flex items-center space-x-1.5 bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-medium px-3 py-1.5 rounded-lg transition-colors shadow-sm"
-            >
-              <LogIn className="w-3.5 h-3.5" />
-              <span>{outputLanguage === 'pt' ? 'Entrar' : 'Sign In'}</span>
-            </button>
+              {currentUser.email && isUserAdmin(currentUser.email) && (
+                <Link
+                  href="/admin"
+                  className="flex items-center space-x-1.5 px-2.5 py-1 bg-indigo-950/80 hover:bg-indigo-900 border border-indigo-700/60 text-indigo-300 hover:text-white rounded-lg text-xs font-mono font-medium transition-colors"
+                  title={outputLanguage === 'pt' ? 'Painel de Telemetria Admin' : 'Admin Telemetry Dashboard'}
+                >
+                  <Activity className="w-3.5 h-3.5 text-indigo-400" />
+                  <span>Admin</span>
+                </Link>
+              )}
+
+              <div className="flex items-center space-x-2 bg-slate-900 border border-slate-800 rounded-lg px-2.5 py-1 text-xs">
+                <User className="w-3.5 h-3.5 text-emerald-400" />
+                <span className="text-slate-300 max-w-[140px] truncate">{currentUser.email}</span>
+                <button
+                  onClick={handleSignOut}
+                  title={outputLanguage === 'pt' ? 'Terminar Sessão' : 'Sign Out'}
+                  className="text-slate-400 hover:text-rose-400 transition-colors ml-1"
+                >
+                  <LogOut className="w-3.5 h-3.5" />
+                </button>
+              </div>
+            </>
           )}
         </div>
       </header>
 
+
       {/* Custom Model ID Input Bar (when custom is selected) */}
-      {modelPreset === 'custom' && (
+      {modelPreset === 'custom' && currentUser && (
         <div className="bg-slate-900/90 border-b border-indigo-900/40 px-6 py-2.5 flex items-center justify-between text-xs">
           <div className="flex items-center space-x-2">
             <span className="text-slate-400">Custom Model Identifier:</span>
@@ -560,10 +666,108 @@ $$
         </div>
       )}
 
-      {/* Main Workspace */}
-      <main className="flex-1 max-w-7xl w-full mx-auto p-6 grid grid-cols-1 lg:grid-cols-12 gap-6">
-        {/* Left Column: Input Form & Uploads */}
-        <section className="lg:col-span-5 space-y-6">
+      {/* Auth Gate: If unauthenticated, show locked entry portal */}
+      {!currentUser ? (
+        <main className="flex-1 flex items-center justify-center p-6">
+          <div className="max-w-md w-full bg-[#0f172a] border border-slate-800 rounded-2xl p-8 shadow-2xl space-y-6 text-center">
+            <div className="inline-flex p-3 bg-indigo-950/80 border border-indigo-800/40 rounded-2xl text-indigo-400 shadow-inner">
+              <ShieldCheck className="w-8 h-8" />
+            </div>
+
+            <div className="space-y-2">
+              <h2 className="text-xl font-bold text-white tracking-tight">
+                {outputLanguage === 'pt' ? 'Acesso Restrito ao Grupo' : 'Restricted Academic Portal'}
+              </h2>
+              <p className="text-xs text-slate-400 leading-relaxed">
+                {outputLanguage === 'pt'
+                  ? 'O SynapseVault é de uso exclusivo da nossa turma/grupo de estudo. Autentica-te com uma conta autorizada na whitelist para aceder ao estúdio de síntese e às notas.'
+                  : 'SynapseVault is restricted to our university study group. Authenticate with an authorized account to access the workspace.'}
+              </p>
+            </div>
+
+            <div className="space-y-3 pt-2">
+              {/* Google Button */}
+              <button
+                onClick={handleGoogleSignIn}
+                className="w-full py-2.5 px-4 bg-white hover:bg-slate-100 text-slate-900 text-xs font-semibold rounded-xl flex items-center justify-center space-x-2 transition-colors shadow-sm"
+              >
+                <svg className="w-4 h-4" viewBox="0 0 24 24">
+                  <path
+                    fill="#4285F4"
+                    d="M23.745 12.27c0-.7-.06-1.4-.19-2.07H12v4.51h6.6c-.29 1.52-1.14 2.8-2.4 3.66v3.05h3.88c2.27-2.09 3.665-5.17 3.665-9.15z"
+                  />
+                  <path
+                    fill="#34A853"
+                    d="M12 24c3.24 0 5.95-1.08 7.93-2.91l-3.88-3.05c-1.08.72-2.45 1.16-4.05 1.16-3.12 0-5.77-2.1-6.72-4.93H1.24v3.15C3.26 21.36 7.33 24 12 24z"
+                  />
+                  <path
+                    fill="#FBBC05"
+                    d="M5.28 14.27c-.25-.72-.38-1.49-.38-2.27s.13-1.55.38-2.27V6.58H1.24C.45 8.15 0 9.99 0 12s.45 3.85 1.24 5.42l4.04-3.15z"
+                  />
+                  <path
+                    fill="#EA4335"
+                    d="M12 4.75c1.77 0 3.35.61 4.6 1.8l3.42-3.42C17.95 1.19 15.24 0 12 0 7.33 0 3.26 2.64 1.24 6.58l4.04 3.15c.95-2.83 3.6-4.98 6.72-4.98z"
+                  />
+                </svg>
+                <span>{outputLanguage === 'pt' ? 'Entrar com Conta Google' : 'Sign In with Google'}</span>
+              </button>
+
+              {/* GitHub Button */}
+              <button
+                onClick={handleGitHubSignIn}
+                className="w-full py-2.5 px-4 bg-[#24292F] hover:bg-[#1f2328] text-white text-xs font-semibold rounded-xl flex items-center justify-center space-x-2 transition-colors border border-slate-700 shadow-sm"
+              >
+                <svg className="w-4 h-4 fill-current" viewBox="0 0 24 24">
+                  <path d="M12 0C5.37 0 0 5.37 0 12c0 5.31 3.435 9.795 8.205 11.385.6.105.825-.255.825-.57 0-.285-.015-1.23-.015-2.235-3.015.555-3.795-.735-4.035-1.41-.135-.345-.72-1.41-1.23-1.695-.42-.225-1.02-.78-.015-.795.945-.015 1.62.87 1.845 1.23 1.08 1.815 2.805 1.305 3.495.99.105-.78.42-1.305.765-1.605-2.67-.3-5.46-1.335-5.46-5.925 0-1.305.465-2.385 1.23-3.225-.12-.3-.54-1.53.12-3.18 0 0 1.005-.315 3.3 1.23.96-.27 1.98-.405 3-.405s2.04.135 3 .405c2.295-1.56 3.3-1.23 3.3-1.23.66 1.65.24 2.88.12 3.18.765.84 1.23 1.905 1.23 3.225 0 4.605-2.805 5.625-5.475 5.925.435.375.81 1.095.81 2.22 0 1.605-.015 2.895-.015 3.3 0 .315.225.69.825.57A12.02 12.02 0 0024 12c0-6.63-5.37-12-12-12z" />
+                </svg>
+                <span>{outputLanguage === 'pt' ? 'Entrar com Conta GitHub' : 'Sign In with GitHub'}</span>
+              </button>
+            </div>
+
+            <div className="flex items-center my-2">
+              <div className="flex-1 border-t border-slate-800" />
+              <span className="px-2 text-[10px] uppercase text-slate-500 font-mono tracking-wider">
+                {outputLanguage === 'pt' ? 'ou email' : 'or email'}
+              </span>
+              <div className="flex-1 border-t border-slate-800" />
+            </div>
+
+            {/* Magic Link */}
+            <form onSubmit={handleMagicLinkSignIn} className="space-y-3 text-left">
+              <div>
+                <label className="block text-xs font-medium text-slate-300 mb-1">
+                  {outputLanguage === 'pt' ? 'Email Universitário' : 'University Email'}
+                </label>
+                <input
+                  type="email"
+                  placeholder="aluno@universidade.pt"
+                  value={authEmailInput}
+                  onChange={(e) => setAuthEmailInput(e.target.value)}
+                  className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3.5 py-2 text-xs text-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                  required
+                />
+              </div>
+
+              {authMessage && (
+                <div className="text-xs text-indigo-300 bg-indigo-950/40 border border-indigo-900/50 rounded-lg p-2.5">
+                  {authMessage}
+                </div>
+              )}
+
+              <button
+                type="submit"
+                className="w-full py-2 bg-indigo-600 hover:bg-indigo-500 text-xs font-medium text-white rounded-xl transition-colors shadow-sm"
+              >
+                {outputLanguage === 'pt' ? 'Enviar Link de Acesso' : 'Send Access Link'}
+              </button>
+            </form>
+          </div>
+        </main>
+      ) : (
+        /* Main Workspace (Unlocked for authenticated users) */
+        <main className="flex-1 max-w-7xl w-full mx-auto p-6 grid grid-cols-1 lg:grid-cols-12 gap-6">
+          {/* Left Column: Input Form & Uploads */}
+          <section className="lg:col-span-5 space-y-6">
           {/* Metadata Card */}
           <div className="bg-[#0f172a] border border-slate-800 rounded-xl p-5 shadow-sm space-y-4">
             <div className="flex items-center justify-between">
@@ -593,8 +797,8 @@ $$
                 className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:ring-2 focus:ring-indigo-500 cursor-pointer"
               >
                 {courses.map((course) => (
-                  <option key={course.id} value={course.code}>
-                    {course.name} ({course.code})
+                  <option key={course.code} value={course.code}>
+                    {outputLanguage === 'en' ? (course.nameEn || course.name) : course.name} ({course.code})
                   </option>
                 ))}
               </select>
@@ -729,17 +933,37 @@ $$
             {/* Action Button */}
             <button
               onClick={handleStartPipeline}
-              disabled={isProcessing}
+              disabled={isProcessing || isCompressing || isAlreadySynthesized}
               className={`w-full py-3 px-4 rounded-lg font-medium text-sm text-white flex items-center justify-center space-x-2 shadow-sm transition-all ${
-                isProcessing
+                isProcessing || isCompressing
                   ? 'bg-indigo-700/60 cursor-not-allowed'
+                  : isAlreadySynthesized
+                  ? 'bg-emerald-700/80 cursor-default'
                   : 'bg-indigo-600 hover:bg-indigo-500 active:scale-[0.99]'
               }`}
             >
-              {isProcessing ? (
+              {isCompressing ? (
+                <>
+                  <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                  <span>
+                    {outputLanguage === 'pt'
+                      ? `A otimizar áudio no browser (${compressionProgress ?? 0}%)...`
+                      : `Compressing audio in browser (${compressionProgress ?? 0}%)...`}
+                  </span>
+                </>
+              ) : isProcessing ? (
                 <>
                   <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
                   <span>{outputLanguage === 'pt' ? 'A Processar Pipeline...' : 'Processing Pipeline...'}</span>
+                </>
+              ) : isAlreadySynthesized ? (
+                <>
+                  <CheckCircle2 className="w-4 h-4 text-emerald-300" />
+                  <span>
+                    {outputLanguage === 'pt'
+                      ? 'Nota Já Sintetizada para este Material'
+                      : 'Note Already Synthesized for this Material'}
+                  </span>
                 </>
               ) : (
                 <>
@@ -818,6 +1042,7 @@ $$
           </div>
         </section>
       </main>
+      )}
 
       {/* Modal: Create Custom Course */}
       {isCreatingCourse && (
@@ -879,101 +1104,6 @@ $$
                   {outputLanguage === 'pt' ? 'Salvar Cadeira' : 'Save Course'}
                 </button>
               </div>
-            </form>
-          </div>
-        </div>
-      )}
-
-      {/* Modal: Student Whitelist Authentication */}
-      {isAuthModalOpen && (
-        <div className="fixed inset-0 z-50 bg-black/75 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="bg-[#0f172a] border border-slate-800 rounded-xl p-6 max-w-md w-full shadow-2xl space-y-4">
-            <div className="flex items-center justify-between border-b border-slate-800 pb-3">
-              <div className="flex items-center space-x-2">
-                <ShieldCheck className="w-5 h-5 text-indigo-400" />
-                <h3 className="text-sm font-bold text-white">
-                  {outputLanguage === 'pt' ? 'Acesso ao SynapseVault' : 'SynapseVault Group Access'}
-                </h3>
-              </div>
-              <button
-                onClick={() => {
-                  setIsAuthModalOpen(false);
-                  setAuthMessage('');
-                }}
-                className="text-slate-400 hover:text-white transition-colors"
-              >
-                <X className="w-4 h-4" />
-              </button>
-            </div>
-
-            <p className="text-xs text-slate-400 leading-relaxed">
-              {outputLanguage === 'pt'
-                ? 'Plataforma restrita ao grupo de estudo da faculdade. Apenas emails autorizados na lista de alunos têm permissão de síntese.'
-                : 'Platform restricted to approved university study members. Only whitelisted student emails can trigger synthesis.'}
-            </p>
-
-            {/* Google OAuth Button */}
-            <button
-              onClick={handleGoogleSignIn}
-              className="w-full py-2.5 px-4 bg-white hover:bg-slate-100 text-slate-900 text-xs font-semibold rounded-lg flex items-center justify-center space-x-2 transition-colors shadow-sm"
-            >
-              <svg className="w-4 h-4" viewBox="0 0 24 24">
-                <path
-                  fill="#4285F4"
-                  d="M23.745 12.27c0-.7-.06-1.4-.19-2.07H12v4.51h6.6c-.29 1.52-1.14 2.8-2.4 3.66v3.05h3.88c2.27-2.09 3.665-5.17 3.665-9.15z"
-                />
-                <path
-                  fill="#34A853"
-                  d="M12 24c3.24 0 5.95-1.08 7.93-2.91l-3.88-3.05c-1.08.72-2.45 1.16-4.05 1.16-3.12 0-5.77-2.1-6.72-4.93H1.24v3.15C3.26 21.36 7.33 24 12 24z"
-                />
-                <path
-                  fill="#FBBC05"
-                  d="M5.28 14.27c-.25-.72-.38-1.49-.38-2.27s.13-1.55.38-2.27V6.58H1.24C.45 8.15 0 9.99 0 12s.45 3.85 1.24 5.42l4.04-3.15z"
-                />
-                <path
-                  fill="#EA4335"
-                  d="M12 4.75c1.77 0 3.35.61 4.6 1.8l3.42-3.42C17.95 1.19 15.24 0 12 0 7.33 0 3.26 2.64 1.24 6.58l4.04 3.15c.95-2.83 3.6-4.98 6.72-4.98z"
-                />
-              </svg>
-              <span>{outputLanguage === 'pt' ? 'Entrar com Conta Google' : 'Sign In with Google'}</span>
-            </button>
-
-            <div className="flex items-center my-3">
-              <div className="flex-1 border-t border-slate-800" />
-              <span className="px-2 text-[10px] uppercase text-slate-500 font-mono tracking-wider">
-                {outputLanguage === 'pt' ? 'ou email' : 'or email'}
-              </span>
-              <div className="flex-1 border-t border-slate-800" />
-            </div>
-
-            {/* Magic Link Form */}
-            <form onSubmit={handleMagicLinkSignIn} className="space-y-3">
-              <div>
-                <label className="block text-xs font-medium text-slate-300 mb-1">
-                  {outputLanguage === 'pt' ? 'Email Universitário / Pessoal' : 'Student / University Email'}
-                </label>
-                <input
-                  type="email"
-                  placeholder="aluno@universidade.pt"
-                  value={authEmailInput}
-                  onChange={(e) => setAuthEmailInput(e.target.value)}
-                  className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                  required
-                />
-              </div>
-
-              {authMessage && (
-                <div className="text-xs text-indigo-300 bg-indigo-950/40 border border-indigo-900/50 rounded-lg p-2.5">
-                  {authMessage}
-                </div>
-              )}
-
-              <button
-                type="submit"
-                className="w-full py-2 bg-indigo-600 hover:bg-indigo-500 text-xs font-medium text-white rounded-lg transition-colors shadow-sm"
-              >
-                {outputLanguage === 'pt' ? 'Enviar Link de Acesso (Magic Link)' : 'Send Magic Access Link'}
-              </button>
             </form>
           </div>
         </div>

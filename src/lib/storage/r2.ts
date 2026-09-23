@@ -43,6 +43,29 @@ export async function generatePresignedUploadUrl(
 }
 
 /**
+ * Uploads an in-memory buffer directly to R2 using server credentials.
+ */
+export async function uploadBufferToR2(
+  key: string,
+  buffer: ArrayBuffer | Buffer,
+  contentType: string
+): Promise<string> {
+  const client = getR2Client();
+  const body = Buffer.isBuffer(buffer) ? buffer : Buffer.from(buffer);
+
+  await client.send(
+    new PutObjectCommand({
+      Bucket: bucketName,
+      Key: key,
+      Body: body,
+      ContentType: contentType,
+    })
+  );
+
+  return key;
+}
+
+/**
  * Downloads a stored file stream from R2 as an ArrayBuffer.
  */
 export async function downloadFileAsBuffer(key: string): Promise<ArrayBuffer> {

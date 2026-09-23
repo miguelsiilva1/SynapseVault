@@ -4,6 +4,7 @@ import { transcribeAudioStream } from '@/lib/ai/groq';
 import { extractPdfText } from '@/lib/pdf/extractText';
 import { synthesizeObsidianNote } from '@/lib/ai/gemini';
 import { enforceAuthGuard } from '@/lib/auth/guard';
+import { persistNoteToDatabase } from '@/lib/db/notes';
 
 export const maxDuration = 120; // Allow 2-minute server execution for large academic jobs
 
@@ -80,10 +81,30 @@ export async function POST(req: Request) {
       outputLanguage: outputLanguage || 'pt',
     });
 
+    // Step 4: Persist note to Supabase DB (if tables exist)
+    const dbPersist = await persistNoteToDatabase({
+      courseName,
+      courseCode,
+      title: lectureTitle,
+      lectureDate,
+      contentMarkdown: synthesis.markdown,
+      authorEmail: auth.email,
+      metadata: {
+        modelUsed: synthesis.modelUsed,
+        metrics: {
+          audioDurationSeconds: audioResult.duration,
+          pdfPagesProcessed: pdfResult.totalPages,
+          transcriptLengthCharacters: audioResult.text.length,
+          slidesLengthCharacters: pdfResult.text.length,
+        },
+      },
+    });
+
     return NextResponse.json({
       success: true,
       markdown: synthesis.markdown,
       modelUsed: synthesis.modelUsed,
+      noteId: dbPersist.id,
       metrics: {
         audioDurationSeconds: audioResult.duration,
         pdfPagesProcessed: pdfResult.totalPages,

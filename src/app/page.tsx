@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import Link from 'next/link';
 import {
   FileAudio,
@@ -20,12 +20,30 @@ import {
   LogOut,
   ShieldCheck,
   Activity,
+  History,
+  GraduationCap,
+  FolderTree,
+  Folder,
+  FolderOpen,
+  ChevronRight,
+  ChevronDown,
+  BookOpen,
+  Clock,
+  RefreshCw,
+  Eye,
+  Trash2,
+  Pencil,
+  Check,
 } from 'lucide-react';
+
 import { compressAudio } from '@/lib/audio/compressAudio';
 import { createClient } from '@/lib/supabase/client';
 import { isUserAdmin } from '@/lib/auth/whitelist';
+import type { PersonalNoteRecord } from '@/lib/db/notes';
+
 
 interface CourseOption {
+
   id: string;
   name: string;
   nameEn?: string;
@@ -88,10 +106,27 @@ export default function Home() {
   const [authEmailInput, setAuthEmailInput] = useState('');
   const [authMessage, setAuthMessage] = useState('');
 
+  // Personal History State (Categorized by Course)
+  const [personalNotes, setPersonalNotes] = useState<PersonalNoteRecord[]>([]);
+  const [loadingHistory, setLoadingHistory] = useState<boolean>(false);
+  const [showHistoryDrawer, setShowHistoryDrawer] = useState<boolean>(false);
+  const [expandedCourseFolders, setExpandedCourseFolders] = useState<Record<string, boolean>>({});
+  const [copiedNoteId, setCopiedNoteId] = useState<string | null>(null);
+  const [editingNoteId, setEditingNoteId] = useState<string | null>(null);
+  const [editingTitle, setEditingTitle] = useState<string>('');
+  const [isSavingTitle, setIsSavingTitle] = useState<boolean>(false);
+
+
+
   // Load custom courses from localStorage and subscribe to Supabase Auth
   useEffect(() => {
     const LEGACY_MOCK_CODES = new Set(['SD', 'SO', 'RC', 'AED', 'BD', 'DS', 'ML']);
     let initialCourses = [...DEFAULT_COURSES];
+
+    const savedLang = localStorage.getItem('synapse_language');
+    if (savedLang === 'en' || savedLang === 'pt') {
+      setOutputLanguage(savedLang);
+    }
 
     try {
       const saved = localStorage.getItem('synapse_custom_courses');
@@ -163,6 +198,148 @@ export default function Home() {
       setAuthLoading(false);
     }
   }, []);
+
+  // Load personal notes
+  const loadPersonalNotes = async () => {
+    if (!currentUser?.email) return;
+    setLoadingHistory(true);
+    try {
+      const res = await fetch('/api/notes/personal');
+      if (res.ok) {
+        const data = await res.json();
+        setPersonalNotes(data.notes || []);
+      }
+    } catch {
+      // non-blocking
+    } finally {
+      setLoadingHistory(false);
+    }
+  };
+
+  useEffect(() => {
+    if (currentUser?.email) {
+      loadPersonalNotes();
+    }
+  }, [currentUser]);
+
+  // Group personal notes by course code
+  const groupedPersonalNotes = useMemo(() => {
+    const map = new Map<string, PersonalNoteRecord[]>();
+    for (const note of personalNotes) {
+      const code = note.course_code || 'OUTRO';
+      if (!map.has(code)) {
+        map.set(code, []);
+      }
+      map.get(code)!.push(note);
+    }
+    return Array.from(map.entries()).sort((a, b) => a[0].localeCompare(b[0]));
+  }, [personalNotes]);
+
+  // Auto-expand all course folders when notes arrive
+  useEffect(() => {
+    if (personalNotes.length > 0) {
+      const expandMap: Record<string, boolean> = {};
+      personalNotes.forEach((n) => {
+        expandMap[n.course_code || 'OUTRO'] = true;
+      });
+      setExpandedCourseFolders((prev) => ({ ...expandMap, ...prev }));
+    }
+  }, [personalNotes]);
+
+  const toggleCourseFolder = (code: string) => {
+    setExpandedCourseFolders((prev) => ({
+      ...prev,
+      [code]: prev[code] === undefined ? false : !prev[code],
+    }));
+  };
+
+  const handleCopyNoteDirect = (note: PersonalNoteRecord) => {
+    navigator.clipboard.writeText(note.content_markdown);
+    setCopiedNoteId(note.id);
+    setTimeout(() => setCopiedNoteId(null), 2000);
+  };
+
+  const handleDownloadNoteDirect = (note: PersonalNoteRecord) => {
+    const blob = new Blob([note.content_markdown], { type: 'text/markdown;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    const safeTitle = note.title.toLowerCase().replace(/[^a-z0-9]+/g, '-');
+    link.href = url;
+    link.download = `${note.course_code}_${safeTitle}.md`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+  };
+
+  const handleDeleteNoteDirect = async (noteId: string) => {
+    const confirmMsg =
+      outputLanguage === 'pt'
+        ? 'Tens a certeza que queres apagar esta nota permanentemente do histórico?'
+        : 'Are you sure you want to permanently delete this note from history?';
+
+    if (!window.confirm(confirmMsg)) return;
+
+    try {
+      const res = await fetch(`/api/notes/personal?id=${encodeURIComponent(noteId)}`, {
+        method: 'DELETE',
+      });
+
+      if (res.ok) {
+        setPersonalNotes((prev) => prev.filter((n) => n.id !== noteId));
+      } else {
+        const data = await res.json();
+        alert(data.error || (outputLanguage === 'pt' ? 'Erro ao apagar nota.' : 'Failed to delete note.'));
+      }
+    } catch (err) {
+      console.error('Error deleting note:', err);
+      alert(outputLanguage === 'pt' ? 'Erro de comunicação ao apagar nota.' : 'Network error deleting note.');
+    }
+  };
+
+  const handleSaveNoteTitle = async (noteId: string) => {
+    const trimmed = editingTitle.trim();
+    if (!trimmed) return;
+
+    setIsSavingTitle(true);
+    try {
+      const res = await fetch('/api/notes/personal', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id: noteId, title: trimmed }),
+      });
+
+      if (res.ok) {
+        setPersonalNotes((prev) =>
+          prev.map((n) =>
+            n.id === noteId
+              ? {
+                  ...n,
+                  title: trimmed,
+                  slug: trimmed.toLowerCase().replace(/[^a-z0-9]+/g, '-'),
+                }
+              : n
+          )
+        );
+        // Sync lectureTitle if open in editor
+        const currentNote = personalNotes.find((n) => n.id === noteId);
+        if (currentNote && lectureTitle === currentNote.title) {
+          setLectureTitle(trimmed);
+        }
+        setEditingNoteId(null);
+      } else {
+        const data = await res.json();
+        alert(data.error || (outputLanguage === 'pt' ? 'Erro ao renomear nota.' : 'Failed to rename note.'));
+      }
+    } catch (err) {
+      console.error('Error renaming note:', err);
+      alert(outputLanguage === 'pt' ? 'Erro de comunicação ao renomear nota.' : 'Network error renaming note.');
+    } finally {
+      setIsSavingTitle(false);
+    }
+  };
+
+
 
   const handleGoogleSignIn = async () => {
     try {
@@ -415,7 +592,9 @@ export default function Home() {
       setSynthesizedMarkdown(result.markdown);
       setLastSynthesizedKey(currentInputKey);
       setStatusMessage(outputLanguage === 'pt' ? 'Síntese concluída com sucesso!' : 'Synthesis complete.');
+      loadPersonalNotes();
     } catch (err) {
+
       console.error(err);
       setErrorMessage(err instanceof Error ? err.message : 'Unknown pipeline error.');
     } finally {
@@ -565,37 +744,83 @@ $$
   return (
     <div className="min-h-screen bg-[#090d16] text-slate-100 flex flex-col font-sans">
       {/* Top Navbar */}
-      <header className="border-b border-slate-800 bg-[#0d1322] px-6 py-4 flex flex-wrap items-center justify-between gap-4">
+      <header className="border-b border-slate-800/80 bg-slate-950/90 backdrop-blur sticky top-0 z-40 px-6 py-3 flex flex-wrap items-center justify-between gap-4">
+        {/* Brand Left */}
         <div className="flex items-center space-x-3">
-          <div className="p-2 bg-indigo-600 rounded-lg shadow-sm">
-            <Cpu className="w-5 h-5 text-white" />
+          <div className="p-2 bg-gradient-to-tr from-indigo-600 to-violet-500 rounded-xl shadow-md shadow-indigo-600/20">
+            <Cpu className="w-4 h-4 text-white" />
           </div>
           <div>
-            <h1 className="text-lg font-bold tracking-tight text-white">SynapseVault</h1>
-            <p className="text-xs text-slate-400">
+            <div className="flex items-center space-x-2">
+              <h1 className="text-sm font-bold tracking-tight text-white">SynapseVault</h1>
+              <span className="px-1.5 py-0.2 text-[9px] uppercase font-mono font-bold tracking-wider bg-indigo-950 border border-indigo-700/60 text-indigo-300 rounded">
+                Studio
+              </span>
+            </div>
+            <p className="text-[11px] text-slate-400 font-mono">
               {outputLanguage === 'pt'
-                ? 'Motor de Síntese Académica para o Obsidian'
-                : 'Academic Lecture Synthesis Engine for Obsidian'}
+                ? 'Síntese Académica para Obsidian'
+                : 'Academic Synthesis for Obsidian'}
             </p>
           </div>
         </div>
 
-        {/* Global Controls: Language & Model */}
+        {/* Global Controls & Navigation */}
         <div className="flex items-center space-x-3">
+          {/* Navigation Links (Salas & Histórico) */}
+          {currentUser && (
+            <div className="flex items-center space-x-2">
+              <Link
+                href="/rooms"
+                className="flex items-center space-x-1.5 px-3 py-1.5 bg-violet-950/60 hover:bg-violet-900/80 border border-violet-700/60 text-violet-200 hover:text-white rounded-lg text-xs font-mono font-medium transition-colors shadow-sm"
+                title={outputLanguage === 'pt' ? 'Salas de Estudo Colaborativas' : 'Study Rooms'}
+              >
+                <GraduationCap className="w-3.5 h-3.5 text-violet-400" />
+                <span>Salas</span>
+              </Link>
+
+              <button
+                onClick={() => {
+                  setShowHistoryDrawer(true);
+                  loadPersonalNotes();
+                }}
+                className="flex items-center space-x-1.5 px-3 py-1.5 bg-slate-900 hover:bg-slate-800 border border-slate-800 text-slate-300 hover:text-white rounded-lg text-xs font-mono transition-colors cursor-pointer"
+                title={outputLanguage === 'pt' ? 'Meu Histórico Pessoal' : 'Personal History'}
+              >
+                <History className="w-3.5 h-3.5 text-indigo-400" />
+                <span>Histórico</span>
+                {personalNotes.length > 0 && (
+                  <span className="px-1.5 py-0.2 bg-indigo-600 text-white rounded-full text-[10px] font-bold">
+                    {personalNotes.length}
+                  </span>
+                )}
+              </button>
+            </div>
+          )}
+
+          {/* Separator */}
+          {currentUser && <div className="h-4 w-px bg-slate-800" />}
+
           {/* Language Selector */}
-          <div className="flex items-center bg-slate-900 border border-slate-800 rounded-lg p-1 text-xs">
+          <div className="flex items-center bg-slate-900 border border-slate-800 rounded-lg p-0.5 text-xs font-mono">
             <Globe className="w-3.5 h-3.5 text-slate-400 ml-2 mr-1" />
             <button
-              onClick={() => setOutputLanguage('pt')}
-              className={`px-2.5 py-1 rounded font-medium transition-colors ${
+              onClick={() => {
+                setOutputLanguage('pt');
+                localStorage.setItem('synapse_language', 'pt');
+              }}
+              className={`px-2 py-0.5 rounded font-semibold transition-colors cursor-pointer ${
                 outputLanguage === 'pt' ? 'bg-indigo-600 text-white' : 'text-slate-400 hover:text-white'
               }`}
             >
               PT
             </button>
             <button
-              onClick={() => setOutputLanguage('en')}
-              className={`px-2.5 py-1 rounded font-medium transition-colors ${
+              onClick={() => {
+                setOutputLanguage('en');
+                localStorage.setItem('synapse_language', 'en');
+              }}
+              className={`px-2 py-0.5 rounded font-semibold transition-colors cursor-pointer ${
                 outputLanguage === 'en' ? 'bg-indigo-600 text-white' : 'text-slate-400 hover:text-white'
               }`}
             >
@@ -603,29 +828,35 @@ $$
             </button>
           </div>
 
-          {/* Model Selector & User Status (Only displayed when authenticated) */}
+          {/* Model Selector (Only displayed when authenticated) */}
           {currentUser && (
-            <>
-              <div className="flex items-center bg-slate-900 border border-slate-800 rounded-lg p-1 text-xs">
-                <Sparkles className="w-3.5 h-3.5 text-indigo-400 ml-2 mr-1" />
-                <select
-                  value={modelPreset}
-                  onChange={(e) => setModelPreset(e.target.value)}
-                  className="bg-transparent text-slate-200 text-xs font-medium focus:outline-none pr-2 py-1 cursor-pointer"
-                >
-                  {AVAILABLE_MODELS.map((m) => (
-                    <option key={m.id} value={m.id} className="bg-slate-900 text-white">
-                      {m.label}
-                    </option>
-                  ))}
-                </select>
-              </div>
+            <div className="flex items-center bg-slate-900 border border-slate-800 rounded-lg px-2 py-1 text-xs font-mono">
+              <Sparkles className="w-3.5 h-3.5 text-indigo-400 mr-1.5 flex-shrink-0" />
+              <select
+                value={modelPreset}
+                onChange={(e) => setModelPreset(e.target.value)}
+                className="bg-transparent text-slate-200 text-xs font-medium focus:outline-none pr-1 cursor-pointer font-mono"
+              >
+                {AVAILABLE_MODELS.map((m) => (
+                  <option key={m.id} value={m.id} className="bg-slate-900 text-white">
+                    {m.label}
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
 
-              {currentUser.email && isUserAdmin(currentUser.email) && (
+          {/* Separator */}
+          {currentUser && <div className="h-4 w-px bg-slate-800" />}
+
+          {/* Admin & Profile */}
+          {currentUser && (
+            <div className="flex items-center space-x-2">
+              {isUserAdmin(currentUser.email) && (
                 <Link
                   href="/admin"
                   className="flex items-center space-x-1.5 px-2.5 py-1 bg-indigo-950/80 hover:bg-indigo-900 border border-indigo-700/60 text-indigo-300 hover:text-white rounded-lg text-xs font-mono font-medium transition-colors"
-                  title={outputLanguage === 'pt' ? 'Painel de Telemetria Admin' : 'Admin Telemetry Dashboard'}
+                  title="Consola de Telemetria de Infraestrutura"
                 >
                   <Activity className="w-3.5 h-3.5 text-indigo-400" />
                   <span>Admin</span>
@@ -633,20 +864,21 @@ $$
               )}
 
               <div className="flex items-center space-x-2 bg-slate-900 border border-slate-800 rounded-lg px-2.5 py-1 text-xs">
-                <User className="w-3.5 h-3.5 text-emerald-400" />
-                <span className="text-slate-300 max-w-[140px] truncate">{currentUser.email}</span>
+                <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
+                <span className="text-slate-300 max-w-[130px] truncate font-mono text-[11px]">{currentUser.email}</span>
                 <button
                   onClick={handleSignOut}
                   title={outputLanguage === 'pt' ? 'Terminar Sessão' : 'Sign Out'}
-                  className="text-slate-400 hover:text-rose-400 transition-colors ml-1"
+                  className="text-slate-400 hover:text-rose-400 transition-colors ml-1 cursor-pointer"
                 >
                   <LogOut className="w-3.5 h-3.5" />
                 </button>
               </div>
-            </>
+            </div>
           )}
         </div>
       </header>
+
 
 
       {/* Custom Model ID Input Bar (when custom is selected) */}
@@ -1108,6 +1340,229 @@ $$
           </div>
         </div>
       )}
+      {/* Drawer: Meu Histórico Pessoal (Organizado por Cadeiras) */}
+      {showHistoryDrawer && (
+        <div className="fixed inset-0 z-50 overflow-hidden">
+          <div
+            className="absolute inset-0 bg-black/60 backdrop-blur-xs transition-opacity"
+            onClick={() => setShowHistoryDrawer(false)}
+          />
+          <div className="fixed inset-y-0 right-0 max-w-full flex pl-10">
+            <div className="w-screen max-w-md bg-slate-900 border-l border-slate-800 p-6 flex flex-col space-y-4 shadow-2xl">
+              {/* Drawer Header */}
+              <div className="flex items-center justify-between pb-3 border-b border-slate-800">
+                <div className="flex items-center space-x-2">
+                  <History className="w-5 h-5 text-indigo-400" />
+                  <h3 className="text-base font-bold text-white">Meu Histórico</h3>
+                  <span className="text-xs px-2 py-0.5 rounded-full bg-indigo-950 text-indigo-300 font-mono font-bold">
+                    {personalNotes.length} notas
+                  </span>
+                  <span className="text-xs px-2 py-0.5 rounded-full bg-slate-800 text-slate-400 font-mono">
+                    {groupedPersonalNotes.length} cadeiras
+                  </span>
+                </div>
+                <button
+                  onClick={() => setShowHistoryDrawer(false)}
+                  className="text-slate-400 hover:text-white transition-colors cursor-pointer text-sm p-1 rounded hover:bg-slate-800"
+                >
+                  ✕
+                </button>
+              </div>
+
+              <p className="text-xs text-slate-400 font-mono leading-relaxed">
+                Notas organizadas por cadeira curricular. Podes copiar ou descarregar diretamente sem abrir no editor.
+              </p>
+
+              {/* Drawer Content */}
+              <div className="flex-1 overflow-y-auto space-y-3 pr-1 font-mono text-xs">
+                {loadingHistory ? (
+                  <div className="space-y-3 animate-pulse">
+                    {[1, 2, 3].map((i) => (
+                      <div key={i} className="h-20 bg-slate-950 rounded-xl" />
+                    ))}
+                  </div>
+                ) : personalNotes.length === 0 ? (
+                  <div className="text-center py-16 space-y-2 text-slate-500 font-mono">
+                    <Folder className="w-8 h-8 mx-auto text-slate-600" />
+                    <p>Ainda não sintetizaste nenhuma nota.</p>
+                  </div>
+                ) : (
+                  groupedPersonalNotes.map(([courseCode, courseNotes]) => {
+                    const isExpanded = expandedCourseFolders[courseCode] !== false;
+                    const matchedCourse = courses.find((c) => c.code === courseCode);
+                    const courseDisplayName = matchedCourse
+                      ? (outputLanguage === 'en' ? (matchedCourse.nameEn || matchedCourse.name) : matchedCourse.name)
+                      : courseCode;
+
+                    return (
+                      <div
+                        key={courseCode}
+                        className="bg-slate-950/80 border border-slate-800 rounded-xl overflow-hidden transition-colors"
+                      >
+                        {/* Course Folder Header (Accordion) */}
+                        <button
+                          onClick={() => toggleCourseFolder(courseCode)}
+                          className="w-full flex items-center justify-between p-3 bg-slate-900/60 hover:bg-slate-900 text-left transition-colors cursor-pointer"
+                        >
+                          <div className="flex items-center space-x-2 truncate pr-2">
+                            {isExpanded ? (
+                              <ChevronDown className="w-3.5 h-3.5 text-indigo-400 flex-shrink-0" />
+                            ) : (
+                              <ChevronRight className="w-3.5 h-3.5 text-slate-500 flex-shrink-0" />
+                            )}
+                            {isExpanded ? (
+                              <FolderOpen className="w-4 h-4 text-amber-400 flex-shrink-0" />
+                            ) : (
+                              <Folder className="w-4 h-4 text-amber-500/80 flex-shrink-0" />
+                            )}
+                            <span className="font-bold text-white text-xs">{courseCode}</span>
+                            <span className="text-slate-400 text-xs truncate max-w-[170px]">
+                              - {courseDisplayName}
+                            </span>
+                          </div>
+
+                          <span className="px-1.5 py-0.2 rounded-full text-[10px] font-bold bg-indigo-950 text-indigo-300 border border-indigo-800/60 flex-shrink-0">
+                            {courseNotes.length}
+                          </span>
+                        </button>
+
+                        {/* Notes List inside Course Folder */}
+                        {isExpanded && (
+                          <div className="p-2 space-y-2 border-t border-slate-800/60">
+                            {courseNotes.map((note) => {
+                              const isCopied = copiedNoteId === note.id;
+
+                              return (
+                                <div
+                                  key={note.id}
+                                  className="bg-slate-900/80 hover:bg-slate-900 border border-slate-800/80 hover:border-slate-700 rounded-lg p-2.5 space-y-1.5 transition-colors"
+                                >
+                                  {editingNoteId === note.id ? (
+                                    <div className="flex items-center gap-1.5 py-0.5">
+                                      <input
+                                        type="text"
+                                        value={editingTitle}
+                                        onChange={(e) => setEditingTitle(e.target.value)}
+                                        onKeyDown={(e) => {
+                                          if (e.key === 'Enter') handleSaveNoteTitle(note.id);
+                                          if (e.key === 'Escape') setEditingNoteId(null);
+                                        }}
+                                        autoFocus
+                                        disabled={isSavingTitle}
+                                        placeholder={outputLanguage === 'pt' ? 'Nome da nota...' : 'Note title...'}
+                                        className="w-full bg-slate-950 border border-indigo-500 rounded px-2 py-1 text-xs text-white focus:outline-none focus:ring-1 focus:ring-indigo-400"
+                                      />
+                                      <button
+                                        onClick={() => handleSaveNoteTitle(note.id)}
+                                        disabled={isSavingTitle || !editingTitle.trim()}
+                                        title={outputLanguage === 'pt' ? 'Guardar' : 'Save'}
+                                        className="p-1 bg-emerald-600 hover:bg-emerald-500 text-white rounded transition-colors cursor-pointer flex-shrink-0 disabled:opacity-50"
+                                      >
+                                        <Check className="w-3.5 h-3.5" />
+                                      </button>
+                                      <button
+                                        onClick={() => setEditingNoteId(null)}
+                                        disabled={isSavingTitle}
+                                        title={outputLanguage === 'pt' ? 'Cancelar' : 'Cancel'}
+                                        className="p-1 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded transition-colors cursor-pointer flex-shrink-0"
+                                      >
+                                        <X className="w-3.5 h-3.5" />
+                                      </button>
+                                    </div>
+                                  ) : (
+                                    <h4
+                                      className="text-xs font-bold text-white leading-snug break-words"
+                                      title={note.title}
+                                    >
+                                      {note.title}
+                                    </h4>
+                                  )}
+
+                                  <div className="flex items-center justify-between pt-1 border-t border-slate-800/40 gap-2">
+                                    <div className="text-[10px] text-slate-500 flex items-center space-x-1.5 truncate">
+                                      <span>
+                                        {new Date(note.lecture_date || note.created_at).toLocaleDateString('pt-PT')}
+                                      </span>
+                                      <span>•</span>
+                                      <span>{note.content_markdown.length.toLocaleString()} chars</span>
+                                    </div>
+
+                                    {editingNoteId !== note.id && (
+                                      <div className="flex items-center space-x-1 flex-shrink-0">
+                                        {/* 1. Rename Note */}
+                                        <button
+                                          onClick={() => {
+                                            setEditingNoteId(note.id);
+                                            setEditingTitle(note.title);
+                                          }}
+                                          title={outputLanguage === 'pt' ? 'Mudar nome da nota' : 'Rename note'}
+                                          className="p-1.5 bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-white rounded transition-colors cursor-pointer"
+                                        >
+                                          <Pencil className="w-3.5 h-3.5" />
+                                        </button>
+
+                                        {/* 2. Copy Direct */}
+                                        <button
+                                          onClick={() => handleCopyNoteDirect(note)}
+                                          title={isCopied ? 'Copiado!' : 'Copiar Markdown'}
+                                          className="p-1.5 bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white rounded transition-colors cursor-pointer"
+                                        >
+                                          {isCopied ? (
+                                            <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />
+                                          ) : (
+                                            <Copy className="w-3.5 h-3.5" />
+                                          )}
+                                        </button>
+
+                                        {/* 3. Download Direct */}
+                                        <button
+                                          onClick={() => handleDownloadNoteDirect(note)}
+                                          title="Descarregar .md (Obsidian)"
+                                          className="p-1.5 bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white rounded transition-colors cursor-pointer"
+                                        >
+                                          <Download className="w-3.5 h-3.5" />
+                                        </button>
+
+                                        {/* 4. Load in Studio Editor */}
+                                        <button
+                                          onClick={() => {
+                                            setSynthesizedMarkdown(note.content_markdown);
+                                            setLectureTitle(note.title);
+                                            setShowHistoryDrawer(false);
+                                          }}
+                                          title="Abrir no Studio"
+                                          className="p-1.5 bg-indigo-950/80 hover:bg-indigo-900 text-indigo-300 hover:text-white rounded transition-colors cursor-pointer border border-indigo-800/40"
+                                        >
+                                          <Eye className="w-3.5 h-3.5" />
+                                        </button>
+
+                                        {/* 5. Delete Note */}
+                                        <button
+                                          onClick={() => handleDeleteNoteDirect(note.id)}
+                                          title={outputLanguage === 'pt' ? 'Apagar nota permanentemente' : 'Delete note permanently'}
+                                          className="p-1.5 bg-slate-800 hover:bg-rose-950/70 text-slate-400 hover:text-rose-400 rounded transition-colors cursor-pointer border border-transparent hover:border-rose-800/50"
+                                        >
+                                          <Trash2 className="w-3.5 h-3.5" />
+                                        </button>
+                                      </div>
+                                    )}
+                                  </div>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })
+                )}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
+
+

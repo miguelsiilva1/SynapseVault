@@ -27,7 +27,7 @@ Students can ingest multi-hour lecture recordings and slide decks to generate Ob
 * **Session Persistence:** Sidebar drag-resizing and folder collapse/expansion states persist across sessions in `localStorage`.
 * **Deep Navigation Memory:** Automatically restores active folder, selected tabs, and tree hierarchy when reloading (`Ctrl + R`) or sharing links.
 
-### 3. Teóricas Hub & Syllabus AI Synthesizer
+### 3. Study Hub & Syllabus AI Synthesizer
 * **Course Home Page Generation:** Automatically extracts institutional syllabi and course PDFs into a structured course portal highlighting evaluation dates, grading rules, and lecture roadmaps.
 * **Smart Weekly Ingestion:** Detects lecture patterns in note titles ("Semana 1", "Aula 02") and routes imported files into corresponding weekly directories automatically.
 * **Weeks Directory & Lecture Archive:** Browse materials by chronological semester week or view all imported class notes in an interactive card grid.
@@ -52,42 +52,42 @@ Students can ingest multi-hour lecture recordings and slide decks to generate Ob
 
 ```mermaid
 flowchart TD
-    subgraph Client ["Client Layer (Browser)"]
-        UI["Studio & Room Workspace\n(Next.js App Router / Tailwind)"]
-        AudioEngine["Web Audio API + LameJS\n(16kHz Mono MP3 Encoder)"]
-        MarkdownEngine["Markdown + KaTeX Engine\n(Math, Callouts, WikiLinks)"]
+    subgraph Client [Client Layer]
+        UI["Studio and Room Workspace<br/>Next.js App Router and Tailwind"]
+        AudioEngine["Web Audio API and LameJS<br/>16kHz Mono MP3 Encoder"]
+        MarkdownEngine["Markdown and KaTeX Engine<br/>Math, Callouts, WikiLinks"]
     end
 
-    subgraph Storage ["Cloudflare R2 & Database"]
-        R2["Cloudflare R2 Object Storage\n(Direct Presigned PUT)"]
-        Postgres["Supabase PostgreSQL 15+\n(RLS, Study Rooms, Notes)"]
+    subgraph Storage [Storage and Database]
+        R2["Cloudflare R2 Object Storage<br/>Direct Presigned PUT"]
+        Postgres["Supabase PostgreSQL 15+<br/>RLS, Study Rooms, Notes"]
     end
 
-    subgraph Services ["Backend Orchestration (Next.js API)"]
+    subgraph Services [Backend Services]
         PresignService["Presigned URL Generator"]
-        PipelineWorker["Pipeline Orchestrator\n(Auto-Purge Post-Transcription)"]
-        PDFParser["PDF Text Stream Extractor (unpdf)"]
+        PipelineWorker["Pipeline Orchestrator<br/>Auto-Purge Post-Transcription"]
+        PDFParser["PDF Text Stream Extractor<br/>unpdf Engine"]
     end
 
-    subgraph AI ["AI Inference Layer"]
-        GroqWhisper["Groq Whisper API\n(whisper-large-v3-turbo)"]
-        GeminiEngine["Google Gemini 3.8 Flash / 2.5 Pro\n(Reasoning, Synthesis, LaTeX)"]
+    subgraph AI [AI Inference Layer]
+        GroqWhisper["Groq Whisper API<br/>whisper-large-v3-turbo"]
+        GeminiEngine["Google Gemini 3.8 Flash and 2.5 Pro<br/>Reasoning, Synthesis, LaTeX"]
     end
 
-    UI -->|1. Raw Audio File| AudioEngine
-    AudioEngine -->|2. Compressed MP3 (~8MB)| UI
-    UI -->|3. Request Presigned URL| PresignService
-    PresignService -->|4. Signed PUT URL| UI
-    UI -->|5. Direct Binary Upload| R2
+    UI -->|"1. Raw Audio File"| AudioEngine
+    AudioEngine -->|"2. Compressed MP3 approx 8MB"| UI
+    UI -->|"3. Request Presigned URL"| PresignService
+    PresignService -->|"4. Signed PUT URL"| UI
+    UI -->|"5. Direct Binary Upload"| R2
 
-    UI -->|6. Trigger Processing| PipelineWorker
-    PipelineWorker -->|Stream Audio| GroqWhisper
-    PipelineWorker -->|Extract Text| PDFParser
-    PipelineWorker -->|Auto-Purge Binary| R2
-    PipelineWorker -->|Consolidated Context| GeminiEngine
-    GeminiEngine -->|Structured Markdown| PipelineWorker
-    PipelineWorker -->|Persist Output| Postgres
-    Postgres -->|Real-Time Fetch| UI
+    UI -->|"6. Trigger Processing"| PipelineWorker
+    PipelineWorker -->|"Stream Audio"| GroqWhisper
+    PipelineWorker -->|"Extract Text"| PDFParser
+    PipelineWorker -->|"Auto-Purge Binary"| R2
+    PipelineWorker -->|"Consolidated Context"| GeminiEngine
+    GeminiEngine -->|"Structured Markdown"| PipelineWorker
+    PipelineWorker -->|"Persist Output"| Postgres
+    Postgres -->|"Real-Time Fetch"| UI
     UI --> MarkdownEngine
 ```
 

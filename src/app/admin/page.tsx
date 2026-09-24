@@ -95,7 +95,7 @@ export default function AdminDashboardPage() {
           <div className="space-y-2">
             <h2 className="text-xl font-bold text-white tracking-tight">Acesso de Administrador Restrito</h2>
             <p className="text-xs text-slate-400 leading-relaxed">
-              O painel de telemetria é estritamente exclusivo ao Miguel ({process.env.NEXT_PUBLIC_ADMIN_EMAILS || 'miguelricasilva@gmail.com'}).
+              O painel de telemetria é estritamente exclusivo a administradores autorizados da plataforma.
               A tua sessão atual ({currentUser?.email || 'anónimo'}) não tem privilégios de administrador.
             </p>
           </div>

@@ -147,10 +147,80 @@ create table notes (
     updated_at timestamptz default now()
 );
 
+-- Collaborative Study Rooms Schema ("Multiplayer NotebookLM")
+create table if not exists study_rooms (
+    id uuid primary key default gen_random_uuid(),
+    name text not null,
+    description text,
+    created_by_email text not null,
+    created_at timestamptz default now(),
+    updated_at timestamptz default now()
+);
+
+create table if not exists room_members (
+    id uuid primary key default gen_random_uuid(),
+    room_id uuid not null references study_rooms(id) on delete cascade,
+    user_email text not null,
+    role text not null default 'member' check (role in ('owner', 'admin', 'member')),
+    joined_at timestamptz default now(),
+    unique (room_id, user_email)
+);
+
+create table if not exists room_folders (
+    id uuid primary key default gen_random_uuid(),
+    room_id uuid not null references study_rooms(id) on delete cascade,
+    parent_id uuid references room_folders(id) on delete cascade,
+    name text not null,
+    folder_type text not null default 'section' check (folder_type in ('year', 'semester', 'course', 'section', 'project')),
+    course_code text,
+    created_by_email text,
+    sort_order integer default 0,
+    created_at timestamptz default now()
+);
+
+create table if not exists room_notes (
+    id uuid primary key default gen_random_uuid(),
+    room_id uuid not null references study_rooms(id) on delete cascade,
+    folder_id uuid not null references room_folders(id) on delete cascade,
+    source_note_id uuid references notes(id) on delete set null,
+    title text not null,
+    content_markdown text not null,
+    author_email text not null,
+    imported_at timestamptz default now()
+);
+
+create table if not exists room_master_summaries (
+    id uuid primary key default gen_random_uuid(),
+    room_id uuid not null references study_rooms(id) on delete cascade,
+    folder_id uuid not null references room_folders(id) on delete cascade unique,
+    content_markdown text not null,
+    updated_by_email text not null,
+    model_used text not null default 'gemini-3.8-flash',
+    sources_count integer default 0,
+    created_at timestamptz default now(),
+    updated_at timestamptz default now()
+);
+
+create table if not exists room_project_logs (
+    id uuid primary key default gen_random_uuid(),
+    room_id uuid not null references study_rooms(id) on delete cascade,
+    folder_id uuid not null references room_folders(id) on delete cascade unique,
+    content_markdown text not null default '',
+    updated_by_email text,
+    created_at timestamptz default now(),
+    updated_at timestamptz default now()
+);
+
 -- Row-Level Security (RLS) Policies
 alter table profiles enable row level security;
 alter table courses enable row level security;
 alter table notes enable row level security;
+alter table study_rooms enable row level security;
+alter table room_members enable row level security;
+alter table room_folders enable row level security;
+alter table room_notes enable row level security;
+alter table room_master_summaries enable row level security;
+alter table room_project_logs enable row level security;
 
 create policy "Users read own profile" on profiles for select using (auth.uid() = id);
 create policy "Authenticated users read courses" on courses for select to authenticated using (true);

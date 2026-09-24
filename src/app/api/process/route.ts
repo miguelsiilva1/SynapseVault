@@ -26,6 +26,7 @@ export async function POST(req: Request) {
       lectureDate,
       audioKey,
       pdfKey,
+      rawMarkdown,
       modelName,
       outputLanguage,
     } = body;
@@ -40,9 +41,9 @@ export async function POST(req: Request) {
       );
     }
 
-    if (!audioKey && !pdfKey) {
+    if (!audioKey && !pdfKey && !rawMarkdown) {
       return NextResponse.json(
-        { error: 'At least one input artifact (audioKey or pdfKey) must be provided for synthesis.' },
+        { error: 'At least one input artifact (audioKey, pdfKey, or rawMarkdown) must be provided for synthesis.' },
         { status: 400 }
       );
     }
@@ -69,19 +70,27 @@ export async function POST(req: Request) {
       activePdfKey ? deleteFileFromR2(activePdfKey) : Promise.resolve(),
     ]);
 
-    // Step 3: Dispatch consolidated payload to Gemini
+    // Step 3: Combine slides text with any provided raw markdown summaries
+    const combinedReferenceText = [
+      pdfResult.text,
+      rawMarkdown ? `### NOTAS E RESUMOS FORNECIDOS:\n${rawMarkdown}` : '',
+    ]
+      .filter(Boolean)
+      .join('\n\n');
+
+    // Step 4: Dispatch consolidated payload to Gemini
     const synthesis = await synthesizeObsidianNote({
       courseName,
       courseCode,
       lectureTitle,
       lectureDate,
       transcriptText: audioResult.text,
-      slidesText: pdfResult.text,
+      slidesText: combinedReferenceText,
       modelName,
       outputLanguage: outputLanguage || 'pt',
     });
 
-    // Step 4: Persist note to Supabase DB (if tables exist)
+    // Step 5: Persist note to Supabase DB (if tables exist)
     const dbPersist = await persistNoteToDatabase({
       courseName,
       courseCode,

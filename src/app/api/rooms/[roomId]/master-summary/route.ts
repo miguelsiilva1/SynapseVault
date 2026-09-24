@@ -1,6 +1,11 @@
 import { NextResponse } from 'next/server';
 import { enforceAuthGuard } from '@/lib/auth/guard';
-import { getFolderMasterSummary, saveFolderMasterSummary, getRoomDetails } from '@/lib/db/rooms';
+import {
+  getFolderMasterSummary,
+  saveFolderMasterSummary,
+  deleteFolderMasterSummary,
+  getRoomDetails,
+} from '@/lib/db/rooms';
 import { regenerateMasterSummaryFull } from '@/lib/ai/masterSynthesis';
 
 export const maxDuration = 120;
@@ -100,6 +105,114 @@ export async function POST(
     });
   } catch (err) {
     const message = err instanceof Error ? err.message : 'Failed to regenerate master summary.';
+    return NextResponse.json({ error: message }, { status: 500 });
+  }
+}
+
+/**
+ * Manually edits/saves custom markdown for a master summary.
+ */
+export async function PATCH(
+  req: Request,
+  context: { params: Promise<{ roomId: string }> }
+) {
+  try {
+    const auth = await enforceAuthGuard();
+    if (!auth.authorized && auth.response) {
+      return auth.response;
+    }
+
+    if (!auth.email) {
+      return NextResponse.json({ error: 'Authentication required.' }, { status: 401 });
+    }
+
+    const { roomId } = await context.params;
+    const body = await req.json();
+    const { folderId, contentMarkdown } = body;
+
+    if (!folderId || typeof contentMarkdown !== 'string') {
+      return NextResponse.json(
+        { error: 'folderId and contentMarkdown are required.' },
+        { status: 400 }
+      );
+    }
+
+    const roomDetails = await getRoomDetails(roomId, auth.email);
+    if (roomDetails.error) {
+      return NextResponse.json({ error: roomDetails.error }, { status: 403 });
+    }
+
+    const targetFolder = (roomDetails.folders || []).find((f) => f.id === folderId);
+    if (!targetFolder) {
+      return NextResponse.json({ error: 'Target folder not found.' }, { status: 404 });
+    }
+
+    const folderNotes = (roomDetails.notes || []).filter((n) => n.folder_id === folderId);
+
+    const saved = await saveFolderMasterSummary({
+      roomId,
+      folderId,
+      contentMarkdown: contentMarkdown,
+      updatedByEmail: auth.email,
+      modelUsed: 'manual-edit',
+      sourcesCount: folderNotes.length,
+    });
+
+    if (saved.error) {
+      return NextResponse.json({ error: saved.error }, { status: 500 });
+    }
+
+    return NextResponse.json({
+      success: true,
+      summary: saved.summary,
+    });
+  } catch (err) {
+    const message = err instanceof Error ? err.message : 'Failed to save master summary.';
+    return NextResponse.json({ error: message }, { status: 500 });
+  }
+}
+
+/**
+ * Deletes the master summary for a folder.
+ */
+export async function DELETE(
+  req: Request,
+  context: { params: Promise<{ roomId: string }> }
+) {
+  try {
+    const auth = await enforceAuthGuard();
+    if (!auth.authorized && auth.response) {
+      return auth.response;
+    }
+
+    if (!auth.email) {
+      return NextResponse.json({ error: 'Authentication required.' }, { status: 401 });
+    }
+
+    const { roomId } = await context.params;
+    const { searchParams } = new URL(req.url);
+    const folderId = searchParams.get('folderId');
+
+    if (!folderId) {
+      return NextResponse.json({ error: 'folderId query parameter required.' }, { status: 400 });
+    }
+
+    const roomDetails = await getRoomDetails(roomId, auth.email);
+    if (roomDetails.error) {
+      return NextResponse.json({ error: roomDetails.error }, { status: 403 });
+    }
+
+    const res = await deleteFolderMasterSummary(folderId);
+    if (!res.success) {
+      return NextResponse.json(
+        { error: res.error || 'Failed to delete master summary.' },
+        { status: 500 }
+      );
+    }
+
+    return NextResponse.json({ success: true });
+  } catch (err) {
+    const message = err instanceof Error ? err.message : 'Failed to delete master summary.';
     return NextResponse.json({ error: message }, { status: 500 });
   }
 }

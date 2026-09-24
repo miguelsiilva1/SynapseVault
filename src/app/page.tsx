@@ -34,6 +34,7 @@ import {
   Trash2,
   Pencil,
   Check,
+  FileCode,
 } from 'lucide-react';
 
 import { compressAudio } from '@/lib/audio/compressAudio';
@@ -83,10 +84,12 @@ export default function Home() {
   const [newCourseName, setNewCourseName] = useState('');
   const [newCourseCode, setNewCourseCode] = useState('');
 
-  // File States
+  // File & Markdown States
   const [audioFile, setAudioFile] = useState<File | null>(null);
   const [compressedAudio, setCompressedAudio] = useState<File | null>(null);
   const [pdfFile, setPdfFile] = useState<File | null>(null);
+  const [pastedMarkdown, setPastedMarkdown] = useState<string>('');
+  const [isSavingDirectNote, setIsSavingDirectNote] = useState<boolean>(false);
 
   // Compression & Upload State
   const [isCompressing, setIsCompressing] = useState<boolean>(false);
@@ -523,8 +526,63 @@ export default function Home() {
     return fileKey;
   };
 
-  const currentInputKey = `${selectedCourse.code}_${lectureTitle.trim()}_${audioFile?.name || ''}_${audioFile?.size || 0}_${pdfFile?.name || ''}_${pdfFile?.size || 0}_${outputLanguage}_${activeModelName}`;
+  const currentInputKey = `${selectedCourse.code}_${lectureTitle.trim()}_${audioFile?.name || ''}_${audioFile?.size || 0}_${pdfFile?.name || ''}_${pdfFile?.size || 0}_${pastedMarkdown.trim()}_${outputLanguage}_${activeModelName}`;
   const isAlreadySynthesized = Boolean(lastSynthesizedKey && lastSynthesizedKey === currentInputKey && synthesizedMarkdown);
+
+  const handleDirectSaveMarkdown = async () => {
+    if (!lectureTitle.trim()) {
+      setErrorMessage(outputLanguage === 'pt' ? 'Indica o título da aula / tópico.' : 'Please enter a lecture title.');
+      return;
+    }
+    if (!pastedMarkdown.trim()) {
+      setErrorMessage(
+        outputLanguage === 'pt'
+          ? 'Cola o conteúdo do resumo em Markdown primeiro.'
+          : 'Please paste your markdown content first.'
+      );
+      return;
+    }
+
+    setIsSavingDirectNote(true);
+    setErrorMessage(null);
+    setStatusMessage(
+      outputLanguage === 'pt'
+        ? 'A guardar resumo nas notas pessoais...'
+        : 'Saving note to personal notes...'
+    );
+
+    try {
+      const res = await fetch('/api/notes/personal', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          courseName: outputLanguage === 'en' ? (selectedCourse.nameEn || selectedCourse.name) : selectedCourse.name,
+          courseCode: selectedCourse.code,
+          title: lectureTitle.trim(),
+          lectureDate,
+          contentMarkdown: pastedMarkdown.trim(),
+        }),
+      });
+
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        throw new Error(data.error || 'Failed to save note.');
+      }
+
+      setSynthesizedMarkdown(pastedMarkdown.trim());
+      setLastSynthesizedKey(currentInputKey);
+      setStatusMessage(
+        outputLanguage === 'pt'
+          ? 'Resumo guardado com sucesso no teu histórico!'
+          : 'Note saved successfully to your history!'
+      );
+      loadPersonalNotes();
+    } catch (err) {
+      setErrorMessage(err instanceof Error ? err.message : 'Erro ao guardar nota.');
+    } finally {
+      setIsSavingDirectNote(false);
+    }
+  };
 
   const handleStartPipeline = async () => {
     if (isProcessing || isCompressing || isAlreadySynthesized) return;
@@ -534,11 +592,11 @@ export default function Home() {
       return;
     }
 
-    if (!audioFile && !pdfFile) {
+    if (!audioFile && !pdfFile && !pastedMarkdown.trim()) {
       setErrorMessage(
         outputLanguage === 'pt'
-          ? 'Seleciona pelo menos um material: áudio da aula ou PDF dos slides.'
-          : 'Select at least one artifact: lecture audio or slides PDF.'
+          ? 'Seleciona pelo menos um material: áudio da aula, slides PDF ou cola um resumo em Markdown.'
+          : 'Select at least one artifact: lecture audio, slides PDF, or paste a markdown summary.'
       );
       return;
     }
@@ -578,6 +636,7 @@ export default function Home() {
           lectureDate,
           audioKey,
           pdfKey,
+          rawMarkdown: pastedMarkdown.trim() || undefined,
           modelName: activeModelName,
           outputLanguage,
         }),
@@ -594,7 +653,6 @@ export default function Home() {
       setStatusMessage(outputLanguage === 'pt' ? 'Síntese concluída com sucesso!' : 'Synthesis complete.');
       loadPersonalNotes();
     } catch (err) {
-
       console.error(err);
       setErrorMessage(err instanceof Error ? err.message : 'Unknown pipeline error.');
     } finally {
@@ -1145,6 +1203,70 @@ $$
                   </div>
                 </div>
               </label>
+            </div>
+
+            {/* Markdown Direct Paste */}
+            <div className="border border-dashed border-slate-700 hover:border-indigo-500/60 rounded-xl p-4 bg-slate-900/60 transition-colors space-y-2.5">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center space-x-3">
+                  <div className="p-2.5 bg-emerald-950/60 border border-emerald-800/40 rounded-lg text-emerald-400">
+                    <FileCode className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <span className="text-sm font-medium text-slate-200 block">
+                      {outputLanguage === 'pt' ? 'Colar Resumo em Markdown' : 'Paste Markdown Summary'}
+                    </span>
+                    <span className="text-xs text-slate-400">
+                      {outputLanguage === 'pt'
+                        ? 'Resumos já feitos ou apontamentos de outras ferramentas'
+                        : 'Existing lecture notes or external summaries'}
+                    </span>
+                  </div>
+                </div>
+                {pastedMarkdown.trim() && (
+                  <button
+                    type="button"
+                    onClick={() => setPastedMarkdown('')}
+                    className="text-[11px] text-slate-400 hover:text-rose-400 font-mono transition-colors cursor-pointer"
+                  >
+                    {outputLanguage === 'pt' ? 'Limpar' : 'Clear'}
+                  </button>
+                )}
+              </div>
+
+              <textarea
+                rows={3}
+                placeholder={
+                  outputLanguage === 'pt'
+                    ? 'Cola aqui o conteúdo em Markdown (tópicos, resumo anterior, etc.)...'
+                    : 'Paste raw Markdown content here (topics, existing summaries, etc.)...'
+                }
+                value={pastedMarkdown}
+                onChange={(e) => setPastedMarkdown(e.target.value)}
+                className="w-full bg-slate-950 border border-slate-800 rounded-lg p-2.5 text-xs text-slate-200 placeholder-slate-500 font-mono focus:outline-none focus:border-indigo-500 leading-relaxed"
+              />
+
+              {pastedMarkdown.trim() && (
+                <div className="flex items-center justify-between pt-1">
+                  <span className="text-[10px] text-slate-500 font-mono">
+                    {pastedMarkdown.length} {outputLanguage === 'pt' ? 'caracteres' : 'chars'}
+                  </span>
+                  <button
+                    type="button"
+                    onClick={handleDirectSaveMarkdown}
+                    disabled={isSavingDirectNote || !lectureTitle.trim()}
+                    title={
+                      outputLanguage === 'pt'
+                        ? 'Guardar diretamente no teu histórico sem gastar tokens de IA'
+                        : 'Save directly to your history without AI generation'
+                    }
+                    className="px-2.5 py-1 bg-slate-800 hover:bg-slate-700 disabled:opacity-50 border border-slate-700 text-slate-200 hover:text-white rounded text-xs font-mono transition-colors flex items-center space-x-1.5 cursor-pointer"
+                  >
+                    {isSavingDirectNote && <RefreshCw className="w-3 h-3 animate-spin text-indigo-400" />}
+                    <span>{outputLanguage === 'pt' ? 'Guardar Direto (Sem IA)' : 'Save Direct (No AI)'}</span>
+                  </button>
+                </div>
+              )}
             </div>
 
             {/* Status / Errors */}

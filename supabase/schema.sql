@@ -137,9 +137,10 @@ create table if not exists public.room_folders (
   room_id uuid not null references public.study_rooms(id) on delete cascade,
   parent_id uuid references public.room_folders(id) on delete cascade,
   name text not null,
-  folder_type text not null check (folder_type in ('year', 'semester', 'course')),
+  folder_type text not null check (folder_type in ('year', 'semester', 'course', 'section', 'project', 'custom')),
   course_code text,
   sort_order integer not null default 0,
+  created_by_email text,
   created_at timestamptz not null default now()
 );
 
@@ -155,7 +156,7 @@ create table if not exists public.room_notes (
   imported_at timestamptz not null default now()
 );
 
--- 3.5 Resumo Geral da Cadeira (Living Master Summary)
+-- 3.5 Resumo Geral da Cadeira / Projeto (Living Master Summary com IA)
 create table if not exists public.room_master_summaries (
   id uuid primary key default gen_random_uuid(),
   room_id uuid not null references public.study_rooms(id) on delete cascade,
@@ -166,6 +167,16 @@ create table if not exists public.room_master_summaries (
   updated_by_email text,
   sources_count integer not null default 0,
   model_used text not null default 'gemini-3.6-flash'
+);
+
+-- 3.6 Log de Grupo / Scratchpad Colaborativo sem IA (Chat MD)
+create table if not exists public.room_project_logs (
+  id uuid primary key default gen_random_uuid(),
+  room_id uuid not null references public.study_rooms(id) on delete cascade,
+  folder_id uuid not null references public.room_folders(id) on delete cascade unique,
+  content_markdown text not null default '',
+  last_updated_at timestamptz not null default now(),
+  updated_by_email text
 );
 
 -- Índices de Desempenho
@@ -222,6 +233,10 @@ drop policy if exists "Authenticated users can insert room notes" on public.room
 create policy "Authenticated users can insert room notes"
   on public.room_notes for insert to authenticated with check (true);
 
+drop policy if exists "Authenticated users can manage room notes" on public.room_notes;
+create policy "Authenticated users can manage room notes"
+  on public.room_notes for all to authenticated using (true) with check (true);
+
 drop policy if exists "Authenticated users can view master summaries" on public.room_master_summaries;
 create policy "Authenticated users can view master summaries"
   on public.room_master_summaries for select to authenticated using (true);
@@ -229,4 +244,14 @@ create policy "Authenticated users can view master summaries"
 drop policy if exists "Authenticated users can manage master summaries" on public.room_master_summaries;
 create policy "Authenticated users can manage master summaries"
   on public.room_master_summaries for all to authenticated using (true) with check (true);
+
+alter table public.room_project_logs enable row level security;
+
+drop policy if exists "Authenticated users can view project logs" on public.room_project_logs;
+create policy "Authenticated users can view project logs"
+  on public.room_project_logs for select to authenticated using (true);
+
+drop policy if exists "Authenticated users can manage project logs" on public.room_project_logs;
+create policy "Authenticated users can manage project logs"
+  on public.room_project_logs for all to authenticated using (true) with check (true);
 

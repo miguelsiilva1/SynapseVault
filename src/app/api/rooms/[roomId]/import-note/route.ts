@@ -1,7 +1,15 @@
 import { NextResponse } from 'next/server';
 import { enforceAuthGuard } from '@/lib/auth/guard';
-import { importNoteToRoom, getFolderMasterSummary, saveFolderMasterSummary, getRoomDetails } from '@/lib/db/rooms';
-import { updateMasterSummaryIncremental } from '@/lib/ai/masterSynthesis';
+import {
+  importNoteToRoom,
+  deleteRoomNote,
+  getFolderMasterSummary,
+  saveFolderMasterSummary,
+  getRoomDetails,
+  findOrCreateSubfolderByName,
+  type RoomFolderRecord,
+} from '@/lib/db/rooms';
+import { updateMasterSummaryIncremental, detectWeekFromTitle } from '@/lib/ai/masterSynthesis';
 
 export const maxDuration = 120; // 2-minute timeout for incremental synthesis
 
@@ -21,7 +29,15 @@ export async function POST(
 
     const { roomId } = await context.params;
     const body = await req.json();
-    const { folderId, sourceNoteId, title, contentMarkdown, triggerMasterUpdate = true, outputLanguage } = body;
+    const {
+      folderId,
+      sourceNoteId,
+      title,
+      contentMarkdown,
+      targetWeek,
+      triggerMasterUpdate = true,
+      outputLanguage,
+    } = body;
 
     if (!folderId || !title || !contentMarkdown) {
       return NextResponse.json(
@@ -36,15 +52,38 @@ export async function POST(
       return NextResponse.json({ error: roomDetails.error }, { status: 403 });
     }
 
-    const targetFolder = (roomDetails.folders || []).find((f) => f.id === folderId);
-    if (!targetFolder) {
+    const initialTarget = (roomDetails.folders || []).find((f) => f.id === folderId);
+    if (!initialTarget) {
       return NextResponse.json({ error: 'Specified folder not found in this room.' }, { status: 404 });
     }
 
-    // 2. Import note to room_notes
+    // 2. Smart Week Routing: if importing into Teóricas root, check for weekly categorization
+    let finalFolderId = folderId;
+    let targetFolder = initialTarget;
+    let reroutedWeekFolder: RoomFolderRecord | undefined;
+
+    const candidateWeek = targetWeek?.trim() || detectWeekFromTitle(title);
+    if (candidateWeek && initialTarget.name.trim().toLowerCase() === 'teóricas') {
+      const subfolderRes = await findOrCreateSubfolderByName({
+        roomId,
+        parentId: initialTarget.id,
+        name: candidateWeek,
+        folderType: 'section',
+        courseCode: initialTarget.course_code,
+        userEmail: auth.email,
+      });
+
+      if (subfolderRes.folder) {
+        finalFolderId = subfolderRes.folder.id;
+        targetFolder = subfolderRes.folder;
+        reroutedWeekFolder = subfolderRes.folder;
+      }
+    }
+
+    // 3. Import note to room_notes
     const imported = await importNoteToRoom({
       roomId,
-      folderId,
+      folderId: finalFolderId,
       sourceNoteId,
       title,
       contentMarkdown,
@@ -57,15 +96,26 @@ export async function POST(
 
     let updatedSummaryResult = null;
 
-    // 3. Incrementally update the Master Summary for this course folder
+    // 4. Incrementally update the Master Summary for this specific folder
     if (triggerMasterUpdate) {
       try {
-        const existingSummaryRes = await getFolderMasterSummary(folderId);
+        const existingSummaryRes = await getFolderMasterSummary(finalFolderId);
         const currentMasterSummary = existingSummaryRes.summary?.content_markdown || '';
 
-        // Extract course name & code
-        const courseCode = targetFolder.course_code || 'GERAL';
-        const courseName = targetFolder.name.replace(/\(.*?\)/g, '').trim() || courseCode;
+        // Extract course name & code (inheriting from parent if subfolder)
+        let courseCode = targetFolder.course_code;
+        let courseName = targetFolder.name;
+        if ((!courseCode || targetFolder.parent_id) && roomDetails.folders) {
+          const parent = roomDetails.folders.find((f) => f.id === targetFolder.parent_id);
+          if (parent) {
+            courseCode = courseCode || parent.course_code;
+            if (parent.name && !targetFolder.name.includes(parent.name)) {
+              courseName = `${parent.name} - ${targetFolder.name}`;
+            }
+          }
+        }
+        courseCode = courseCode || 'GERAL';
+        courseName = courseName.replace(/\(.*?\)/g, '').trim() || courseCode;
 
         const aiResult = await updateMasterSummaryIncremental({
           courseName,
@@ -78,11 +128,11 @@ export async function POST(
 
         // Compute total notes in this folder (including the newly added one)
         const notesInFolderCount =
-          (roomDetails.notes || []).filter((n) => n.folder_id === folderId).length + 1;
+          (roomDetails.notes || []).filter((n) => n.folder_id === finalFolderId).length + 1;
 
         const savedSummary = await saveFolderMasterSummary({
           roomId,
-          folderId,
+          folderId: finalFolderId,
           contentMarkdown: aiResult.markdown,
           updatedByEmail: auth.email,
           modelUsed: aiResult.modelUsed,
@@ -100,9 +150,51 @@ export async function POST(
       success: true,
       note: imported.note,
       masterSummary: updatedSummaryResult,
+      targetFolderId: finalFolderId,
+      weekFolder: reroutedWeekFolder,
     });
   } catch (err) {
     const message = err instanceof Error ? err.message : 'Failed to import note.';
     return NextResponse.json({ error: message }, { status: 500 });
   }
 }
+
+export async function DELETE(
+  req: Request,
+  context: { params: Promise<{ roomId: string }> }
+) {
+  try {
+    const auth = await enforceAuthGuard();
+    if (!auth.authorized && auth.response) {
+      return auth.response;
+    }
+
+    if (!auth.email) {
+      return NextResponse.json({ error: 'Authentication required.' }, { status: 401 });
+    }
+
+    const { roomId } = await context.params;
+    const { searchParams } = new URL(req.url);
+    const noteId = searchParams.get('noteId');
+
+    if (!noteId) {
+      return NextResponse.json({ error: 'noteId is required.' }, { status: 400 });
+    }
+
+    const res = await deleteRoomNote({
+      roomId,
+      noteId,
+      userEmail: auth.email,
+    });
+
+    if (res.error) {
+      return NextResponse.json({ error: res.error }, { status: 400 });
+    }
+
+    return NextResponse.json({ success: true });
+  } catch (err) {
+    const message = err instanceof Error ? err.message : 'Failed to delete note.';
+    return NextResponse.json({ error: message }, { status: 500 });
+  }
+}
+

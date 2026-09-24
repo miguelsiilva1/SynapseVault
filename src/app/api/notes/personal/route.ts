@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { enforceAuthGuard } from '@/lib/auth/guard';
-import { getPersonalNotes, deletePersonalNote, updatePersonalNoteTitle } from '@/lib/db/notes';
+import { getPersonalNotes, deletePersonalNote, updatePersonalNoteTitle, persistNoteToDatabase } from '@/lib/db/notes';
 
 export const dynamic = 'force-dynamic';
 
@@ -87,4 +87,47 @@ export async function DELETE(req: Request) {
     return NextResponse.json({ error: message }, { status: 500 });
   }
 }
+
+export async function POST(req: Request) {
+  try {
+    const auth = await enforceAuthGuard();
+    if (!auth.authorized && auth.response) {
+      return auth.response;
+    }
+
+    const email = auth.email;
+    if (!email) {
+      return NextResponse.json({ error: 'No authenticated email identified.' }, { status: 401 });
+    }
+
+    const body = await req.json();
+    const { courseName, courseCode, title, lectureDate, contentMarkdown } = body;
+
+    if (!courseCode || !title || !contentMarkdown) {
+      return NextResponse.json(
+        { error: 'courseCode, title, and contentMarkdown are required.' },
+        { status: 400 }
+      );
+    }
+
+    const res = await persistNoteToDatabase({
+      courseName: courseName || courseCode,
+      courseCode,
+      title: title.trim(),
+      lectureDate: lectureDate || new Date().toISOString().split('T')[0],
+      contentMarkdown,
+      authorEmail: email,
+    });
+
+    if (res.error) {
+      return NextResponse.json({ error: res.error }, { status: 500 });
+    }
+
+    return NextResponse.json({ success: true, id: res.id });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'Failed to save personal note.';
+    return NextResponse.json({ error: message }, { status: 500 });
+  }
+}
+
 

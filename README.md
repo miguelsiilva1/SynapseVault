@@ -146,6 +146,8 @@ SynapseVault/
 
 ## Getting Started
 
+> **Want to use SynapseVault?** The hosted instance is private. Clone the repository and run it with your own environment keys (Supabase, Cloudflare R2, Gemini, Groq), as described below.
+
 ### 1. Clone & Install Dependencies
 ```bash
 git clone git@github.com:miguelsiilva1/SynapseVault.git
@@ -154,12 +156,7 @@ npm install
 ```
 
 ### 2. Configure Environment Variables
-Copy the configuration template:
-```bash
-cp .env.example .env.local
-```
-
-Populate the required secrets in `.env.local`:
+Create a `.env.local` file in the project root with your own keys:
 ```env
 # Supabase
 NEXT_PUBLIC_SUPABASE_URL=your_supabase_project_url
@@ -171,10 +168,15 @@ GEMINI_API_KEY=your_gemini_api_key
 GROQ_API_KEY=your_groq_api_key
 
 # Cloudflare R2
-R2_ACCOUNT_ID=your_cloudflare_account_id
+CLOUDFLARE_ACCOUNT_ID=your_cloudflare_account_id
 R2_ACCESS_KEY_ID=your_r2_access_key
 R2_SECRET_ACCESS_KEY=your_r2_secret_key
 R2_BUCKET_NAME=your_r2_bucket_name
+
+# Access control (optional, comma-separated; leave both unset to allow any signed-in user)
+AUTHORIZED_EMAILS=friend1@example.com,friend2@example.com
+AUTHORIZED_DOMAINS=university.pt
+ADMIN_EMAILS=you@example.com
 ```
 
 ### 3. Database Initialization

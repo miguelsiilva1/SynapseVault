@@ -1,5 +1,6 @@
 import { marked } from 'marked';
 import katex from 'katex';
+import DOMPurify from 'dompurify';
 
 /**
  * SVG icons for callouts (Zero emojis rule compliant)
@@ -126,20 +127,36 @@ function processWikiLinks(text: string): string {
 }
 
 /**
+ * Sanitizes rendered HTML before it reaches dangerouslySetInnerHTML.
+ * Note content comes from users and AI output, so it is untrusted.
+ * KaTeX needs inline styles, SVG and MathML (semantics/annotation are off by default).
+ * DOMPurify needs a DOM, so on the server this returns '' and the client renders it.
+ */
+function sanitizeHtml(html: string): string {
+  if (typeof window === 'undefined') return '';
+  return DOMPurify.sanitize(html, {
+    ADD_TAGS: ['semantics', 'annotation'],
+    ADD_ATTR: ['encoding'],
+  });
+}
+
+/**
  * Main Markdown renderer with KaTeX math, callouts, wiki-links, and clean typography
  */
 export function renderMarkdown(markdown: string): string {
   if (!markdown) return '';
+  let html: string;
   try {
     const withCallouts = processCallouts(markdown);
     const withWikiLinks = processWikiLinks(withCallouts);
     const withMath = processMath(withWikiLinks);
-    return marked.parse(withMath, {
+    html = marked.parse(withMath, {
       gfm: true,
       breaks: true, // Preserves single newlines as line breaks for handwritten notes and questionnaires
     }) as string;
   } catch (err) {
     console.error('Error in renderMarkdown:', err);
-    return marked.parse(markdown, { gfm: true, breaks: true }) as string;
+    html = marked.parse(markdown, { gfm: true, breaks: true }) as string;
   }
+  return sanitizeHtml(html);
 }

@@ -79,9 +79,13 @@ create table if not exists public.room_project_logs (
   room_id uuid not null references public.study_rooms(id) on delete cascade,
   folder_id uuid not null references public.room_folders(id) on delete cascade unique,
   content_markdown text not null default '',
+  guidelines_markdown text,
   last_updated_at timestamptz not null default now(),
   updated_by_email text
 );
+
+-- Upgrade path for databases created before guidelines_markdown existed
+alter table public.room_project_logs add column if not exists guidelines_markdown text;
 
 -- Indexes
 create index if not exists idx_notes_course_code on public.notes(course_code);
@@ -129,69 +133,111 @@ create policy "Authenticated users can view courses" on public.courses for selec
 drop policy if exists "Authenticated users can insert courses" on public.courses;
 create policy "Authenticated users can insert courses" on public.courses for insert to authenticated with check (true);
 
--- Policies: Notes
+-- Room access helpers (security definer so policies on room_members do not recurse)
+create or replace function public.is_room_member(target_room_id uuid)
+returns boolean
+language sql
+stable
+security definer
+set search_path = public
+as $$
+  select exists (
+    select 1 from public.room_members
+    where room_id = target_room_id
+      and user_email = lower(auth.jwt() ->> 'email')
+  );
+$$;
+
+create or replace function public.is_room_owner(target_room_id uuid)
+returns boolean
+language sql
+stable
+security definer
+set search_path = public
+as $$
+  select exists (
+    select 1 from public.room_members
+    where room_id = target_room_id
+      and user_email = lower(auth.jwt() ->> 'email')
+      and role = 'owner'
+  );
+$$;
+
+-- Policies: Notes (personal notes are private to their author)
 drop policy if exists "Authenticated users can view notes" on public.notes;
-create policy "Authenticated users can view notes" on public.notes for select to authenticated using (true);
+drop policy if exists "Users can view their own notes" on public.notes;
+create policy "Users can view their own notes" on public.notes for select to authenticated
+  using (author_email = lower(auth.jwt() ->> 'email'));
 
 drop policy if exists "Authenticated users can insert notes" on public.notes;
-create policy "Authenticated users can insert notes" on public.notes for insert to authenticated with check (true);
+drop policy if exists "Users can insert their own notes" on public.notes;
+create policy "Users can insert their own notes" on public.notes for insert to authenticated
+  with check (author_email = lower(auth.jwt() ->> 'email'));
 
 drop policy if exists "Users can update their own notes" on public.notes;
 create policy "Users can update their own notes" on public.notes for update to authenticated
-  using (author_email = (auth.jwt() ->> 'email'))
-  with check (author_email = (auth.jwt() ->> 'email'));
+  using (author_email = lower(auth.jwt() ->> 'email'))
+  with check (author_email = lower(auth.jwt() ->> 'email'));
 
 drop policy if exists "Users can delete their own notes" on public.notes;
 create policy "Users can delete their own notes" on public.notes for delete to authenticated
-  using (author_email = (auth.jwt() ->> 'email'));
+  using (author_email = lower(auth.jwt() ->> 'email'));
 
 -- Policies: Study Rooms
 drop policy if exists "Authenticated users can view study rooms" on public.study_rooms;
-create policy "Authenticated users can view study rooms" on public.study_rooms for select to authenticated using (true);
+drop policy if exists "Members can view study rooms" on public.study_rooms;
+create policy "Members can view study rooms" on public.study_rooms for select to authenticated
+  using (public.is_room_member(id));
 
 drop policy if exists "Authenticated users can create study rooms" on public.study_rooms;
-create policy "Authenticated users can create study rooms" on public.study_rooms for insert to authenticated with check (true);
+drop policy if exists "Users can create their own study rooms" on public.study_rooms;
+create policy "Users can create their own study rooms" on public.study_rooms for insert to authenticated
+  with check (owner_email = lower(auth.jwt() ->> 'email'));
 
 drop policy if exists "Authenticated users can update study rooms" on public.study_rooms;
-create policy "Authenticated users can update study rooms" on public.study_rooms for update to authenticated using (true) with check (true);
+drop policy if exists "Owners can update study rooms" on public.study_rooms;
+create policy "Owners can update study rooms" on public.study_rooms for update to authenticated
+  using (public.is_room_owner(id)) with check (public.is_room_owner(id));
 
 -- Policies: Room Members
 drop policy if exists "Authenticated users can view room members" on public.room_members;
-create policy "Authenticated users can view room members" on public.room_members for select to authenticated using (true);
+drop policy if exists "Members can view room members" on public.room_members;
+create policy "Members can view room members" on public.room_members for select to authenticated
+  using (public.is_room_member(room_id));
 
 drop policy if exists "Authenticated users can manage room members" on public.room_members;
-create policy "Authenticated users can manage room members" on public.room_members for all to authenticated using (true) with check (true);
+drop policy if exists "Owners can manage room members" on public.room_members;
+create policy "Owners can manage room members" on public.room_members for all to authenticated
+  using (public.is_room_owner(room_id)) with check (public.is_room_owner(room_id));
 
 -- Policies: Room Folders
 drop policy if exists "Authenticated users can view room folders" on public.room_folders;
-create policy "Authenticated users can view room folders" on public.room_folders for select to authenticated using (true);
-
 drop policy if exists "Authenticated users can manage room folders" on public.room_folders;
-create policy "Authenticated users can manage room folders" on public.room_folders for all to authenticated using (true) with check (true);
+drop policy if exists "Members can manage room folders" on public.room_folders;
+create policy "Members can manage room folders" on public.room_folders for all to authenticated
+  using (public.is_room_member(room_id)) with check (public.is_room_member(room_id));
 
 -- Policies: Room Notes
 drop policy if exists "Authenticated users can view room notes" on public.room_notes;
-create policy "Authenticated users can view room notes" on public.room_notes for select to authenticated using (true);
-
 drop policy if exists "Authenticated users can insert room notes" on public.room_notes;
-create policy "Authenticated users can insert room notes" on public.room_notes for insert to authenticated with check (true);
-
 drop policy if exists "Authenticated users can manage room notes" on public.room_notes;
-create policy "Authenticated users can manage room notes" on public.room_notes for all to authenticated using (true) with check (true);
+drop policy if exists "Members can manage room notes" on public.room_notes;
+create policy "Members can manage room notes" on public.room_notes for all to authenticated
+  using (public.is_room_member(room_id)) with check (public.is_room_member(room_id));
 
 -- Policies: Room Master Summaries
 drop policy if exists "Authenticated users can view master summaries" on public.room_master_summaries;
-create policy "Authenticated users can view master summaries" on public.room_master_summaries for select to authenticated using (true);
-
 drop policy if exists "Authenticated users can manage master summaries" on public.room_master_summaries;
-create policy "Authenticated users can manage master summaries" on public.room_master_summaries for all to authenticated using (true) with check (true);
+drop policy if exists "Members can manage master summaries" on public.room_master_summaries;
+create policy "Members can manage master summaries" on public.room_master_summaries for all to authenticated
+  using (public.is_room_member(room_id)) with check (public.is_room_member(room_id));
 
 -- Policies: Room Project Logs
 drop policy if exists "Authenticated users can view project logs" on public.room_project_logs;
-create policy "Authenticated users can view project logs" on public.room_project_logs for select to authenticated using (true);
-
 drop policy if exists "Authenticated users can manage project logs" on public.room_project_logs;
-create policy "Authenticated users can manage project logs" on public.room_project_logs for all to authenticated using (true) with check (true);
+drop policy if exists "Members can manage project logs" on public.room_project_logs;
+create policy "Members can manage project logs" on public.room_project_logs for all to authenticated
+  using (public.is_room_member(room_id)) with check (public.is_room_member(room_id));
 
 -- Seed Data
 insert into public.courses (name, code) values

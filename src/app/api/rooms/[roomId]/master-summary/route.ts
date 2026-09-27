@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { enforceAuthGuard } from '@/lib/auth/guard';
 import {
   getFolderMasterSummary,
+  verifyRoomFolderAccess,
   saveFolderMasterSummary,
   deleteFolderMasterSummary,
   getRoomDetails,
@@ -20,11 +21,21 @@ export async function GET(
       return auth.response;
     }
 
+    if (!auth.email) {
+      return NextResponse.json({ error: 'Authentication required.' }, { status: 401 });
+    }
+
     const { searchParams } = new URL(req.url);
     const folderId = searchParams.get('folderId');
 
     if (!folderId) {
       return NextResponse.json({ error: 'folderId query parameter required.' }, { status: 400 });
+    }
+
+    const { roomId } = await context.params;
+    const access = await verifyRoomFolderAccess({ roomId, folderId, userEmail: auth.email });
+    if (access.error) {
+      return NextResponse.json({ error: access.error }, { status: access.status || 403 });
     }
 
     const { summary, error } = await getFolderMasterSummary(folderId);

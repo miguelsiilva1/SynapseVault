@@ -403,6 +403,49 @@ export async function importNoteToRoom(params: {
 }
 
 /**
+ * Verifies that the user is a member of the room and that the folder belongs to that room.
+ * Use before any folder-scoped read/write that does not go through getRoomDetails.
+ */
+export async function verifyRoomFolderAccess(params: {
+  roomId: string;
+  folderId: string;
+  userEmail: string;
+}): Promise<{ error?: string; status?: number }> {
+  try {
+    const supabase = createAdminSupabaseClient() || (await createServerSupabaseClient());
+    if (!supabase) return { error: 'Supabase unconfigured.', status: 500 };
+
+    const email = params.userEmail.trim().toLowerCase();
+
+    const [memberRes, folderRes] = await Promise.all([
+      supabase
+        .from('room_members')
+        .select('role')
+        .eq('room_id', params.roomId)
+        .eq('user_email', email)
+        .maybeSingle(),
+      supabase
+        .from('room_folders')
+        .select('id')
+        .eq('id', params.folderId)
+        .eq('room_id', params.roomId)
+        .maybeSingle(),
+    ]);
+
+    if (!memberRes.data) {
+      return { error: 'Access denied. You are not a member of this study room.', status: 403 };
+    }
+    if (!folderRes.data) {
+      return { error: 'Target folder not found.', status: 404 };
+    }
+    return {};
+  } catch (err) {
+    console.warn('[Supabase DB] Error in verifyRoomFolderAccess:', err);
+    return { error: 'Failed to verify room access.', status: 500 };
+  }
+}
+
+/**
  * Gets the current master summary for a course folder.
  */
 export async function getFolderMasterSummary(
@@ -695,6 +738,17 @@ export async function createRoomFolder(params: {
     // If creating top-level year or semester: require owner
     if ((folderType === 'year' || folderType === 'semester') && memberCheck.role !== 'owner') {
       return { error: 'Apenas o administrador pode criar anos ou semestres.' };
+    }
+
+    // Parent must belong to the same room (prevents cross-room folder linking)
+    if (params.parentId) {
+      const { data: parent } = await supabase
+        .from('room_folders')
+        .select('id')
+        .eq('id', params.parentId)
+        .eq('room_id', params.roomId)
+        .maybeSingle();
+      if (!parent) return { error: 'Pasta pai não encontrada nesta sala.' };
     }
 
     // Determine sort_order
@@ -1087,11 +1141,11 @@ export async function deleteRoomNote(params: {
     // 2. Fetch room to check owner
     const { data: room } = await supabase
       .from('study_rooms')
-      .select('created_by_email')
+      .select('owner_email')
       .eq('id', params.roomId)
       .maybeSingle();
 
-    const isOwner = room?.created_by_email?.toLowerCase() === email;
+    const isOwner = room?.owner_email?.toLowerCase() === email;
     const isAuthor = note.author_email?.toLowerCase() === email;
 
     if (!isOwner && !isAuthor) {

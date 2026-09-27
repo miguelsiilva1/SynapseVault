@@ -15,8 +15,14 @@ export function isUserAuthorized(email?: string | null): WhitelistCheckResult {
   const rawAuthorizedEmails = process.env.AUTHORIZED_EMAILS;
   const rawAuthorizedDomains = process.env.AUTHORIZED_DOMAINS;
 
-  // If no whitelist is configured (e.g. early local dev), allow and warn
+  // No whitelist configured: allow in local dev, fail closed in production
   if (!rawAuthorizedEmails && !rawAuthorizedDomains) {
+    if (process.env.NODE_ENV === 'production') {
+      return {
+        authorized: false,
+        reason: 'Access whitelist is not configured. Set AUTHORIZED_EMAILS or AUTHORIZED_DOMAINS.',
+      };
+    }
     return { authorized: true };
   }
 

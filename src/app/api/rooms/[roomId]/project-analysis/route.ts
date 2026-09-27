@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { enforceAuthGuard } from '@/lib/auth/guard';
 import { generateProjectGuidelinesSynthesis } from '@/lib/ai/masterSynthesis';
-import { saveProjectGuidelines, getProjectLog, getRoomDetails } from '@/lib/db/rooms';
+import { saveProjectGuidelines, getProjectLog, getRoomDetails, verifyRoomFolderAccess } from '@/lib/db/rooms';
 
 export const dynamic = 'force-dynamic';
 
@@ -15,10 +15,20 @@ export async function GET(
       return auth.response;
     }
 
+    if (!auth.email) {
+      return NextResponse.json({ error: 'Autenticação necessária.' }, { status: 401 });
+    }
+
     const { searchParams } = new URL(req.url);
     const folderId = searchParams.get('folderId');
     if (!folderId) {
       return NextResponse.json({ error: 'folderId obrigatório.' }, { status: 400 });
+    }
+
+    const { roomId } = await context.params;
+    const access = await verifyRoomFolderAccess({ roomId, folderId, userEmail: auth.email });
+    if (access.error) {
+      return NextResponse.json({ error: access.error }, { status: access.status || 403 });
     }
 
     const res = await getProjectLog(folderId);

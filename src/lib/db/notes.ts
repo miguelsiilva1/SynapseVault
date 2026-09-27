@@ -31,7 +31,7 @@ export async function persistNoteToDatabase(params: InsertNoteParams): Promise<{
         slug,
         lecture_date: params.lectureDate || new Date().toISOString().split('T')[0],
         content_markdown: params.contentMarkdown,
-        author_email: params.authorEmail,
+        author_email: params.authorEmail?.trim().toLowerCase(),
         metadata: params.metadata || {},
       })
       .select('id')

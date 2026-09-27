@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { enforceAuthGuard } from '@/lib/auth/guard';
-import { getProjectLog, saveProjectLog, appendProjectLogEntry } from '@/lib/db/rooms';
+import { getProjectLog, saveProjectLog, appendProjectLogEntry, verifyRoomFolderAccess } from '@/lib/db/rooms';
 
 export const dynamic = 'force-dynamic';
 
@@ -14,10 +14,20 @@ export async function GET(
       return auth.response;
     }
 
+    if (!auth.email) {
+      return NextResponse.json({ error: 'Autenticação necessária.' }, { status: 401 });
+    }
+
     const { searchParams } = new URL(req.url);
     const folderId = searchParams.get('folderId');
     if (!folderId) {
       return NextResponse.json({ error: 'Folder ID obrigatório.' }, { status: 400 });
+    }
+
+    const { roomId } = await context.params;
+    const access = await verifyRoomFolderAccess({ roomId, folderId, userEmail: auth.email });
+    if (access.error) {
+      return NextResponse.json({ error: access.error }, { status: access.status || 403 });
     }
 
     const res = await getProjectLog(folderId);
@@ -56,6 +66,11 @@ export async function POST(
 
     if (!folderId) {
       return NextResponse.json({ error: 'Folder ID obrigatório.' }, { status: 400 });
+    }
+
+    const access = await verifyRoomFolderAccess({ roomId, folderId, userEmail: auth.email });
+    if (access.error) {
+      return NextResponse.json({ error: access.error }, { status: access.status || 403 });
     }
 
     // Append mode (chat style) or Full content update

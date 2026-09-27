@@ -12,23 +12,18 @@ import {
   CheckCircle2,
   AlertCircle,
   Sparkles,
-  Zap,
   Plus,
   Globe,
   X,
-  User,
   LogOut,
   ShieldCheck,
   Activity,
   History,
   GraduationCap,
-  FolderTree,
   Folder,
   FolderOpen,
   ChevronRight,
   ChevronDown,
-  BookOpen,
-  Clock,
   RefreshCw,
   Eye,
   Trash2,
@@ -223,6 +218,7 @@ export default function Home() {
     if (currentUser?.email) {
       loadPersonalNotes();
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- reload only when the user changes
   }, [currentUser]);
 
   // Group personal notes by course code

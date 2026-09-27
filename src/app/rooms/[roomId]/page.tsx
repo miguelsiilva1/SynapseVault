@@ -36,7 +36,6 @@ import {
   Edit3,
   CheckSquare,
   MessageSquare,
-  GripVertical,
   ArrowRight,
 } from 'lucide-react';
 import { createClient } from '@/lib/supabase/client';
@@ -60,7 +59,7 @@ export default function RoomWorkspacePage({
   const roomId = resolvedParams.roomId;
 
   const [currentUser, setCurrentUser] = useState<{ email?: string } | null>(null);
-  const [loading, setLoading] = useState(true);
+  const [, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   // Language State
@@ -192,11 +191,11 @@ export default function RoomWorkspacePage({
       }
       const savedCourseTab = localStorage.getItem(`synapse_room_${roomId}_course_tab`);
       if (savedCourseTab && ['master', 'weeks', 'notes'].includes(savedCourseTab)) {
-        setActiveCourseTab(savedCourseTab as any);
+        setActiveCourseTab(savedCourseTab as typeof activeCourseTab);
       }
       const savedProjTab = localStorage.getItem(`synapse_room_${roomId}_project_tab`);
       if (savedProjTab && ['log', 'master', 'analysis', 'notes'].includes(savedProjTab)) {
-        setActiveProjectTab(savedProjTab as any);
+        setActiveProjectTab(savedProjTab as typeof activeProjectTab);
       }
     } catch {
       // ignore parse error
@@ -350,6 +349,7 @@ export default function RoomWorkspacePage({
 
   useEffect(() => {
     loadRoomData();
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- reload only when the room changes
   }, [roomId]);
 
   // Is current user room creator / owner?
@@ -824,6 +824,7 @@ export default function RoomWorkspacePage({
     }, 1000);
 
     return () => clearTimeout(timer);
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- performAutoSave only reads selectedFolderId and roomId
   }, [masterNoteDraft, selectedFolderId]);
 
   // Create blank master note directly

@@ -8,12 +8,10 @@ import {
   Plus,
   ArrowLeft,
   Sparkles,
-  BookOpen,
   ArrowRight,
   ShieldCheck,
   AlertCircle,
   RefreshCw,
-  LogOut,
   GraduationCap,
   Globe,
 } from 'lucide-react';
@@ -22,7 +20,7 @@ import type { StudyRoomRecord } from '@/lib/db/rooms';
 
 export default function RoomsHubPage() {
   const [currentUser, setCurrentUser] = useState<{ email?: string } | null>(null);
-  const [authLoading, setAuthLoading] = useState(true);
+  const [, setAuthLoading] = useState(true);
   const [rooms, setRooms] = useState<StudyRoomRecord[]>([]);
   const [loadingRooms, setLoadingRooms] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -100,6 +98,7 @@ export default function RoomsHubPage() {
     if (currentUser?.email) {
       loadRooms();
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- reload only when the user changes
   }, [currentUser]);
 
   // Handle create room

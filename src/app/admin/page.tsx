@@ -7,7 +7,6 @@ import {
   Cpu,
   Database,
   HardDrive,
-  Clock,
   Users,
   FileText,
   RefreshCw,

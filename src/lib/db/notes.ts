@@ -57,7 +57,7 @@ export interface PersonalNoteRecord {
   lecture_date: string;
   content_markdown: string;
   author_email: string;
-  metadata: Record<string, any>;
+  metadata: Record<string, unknown>;
   created_at: string;
 }
 

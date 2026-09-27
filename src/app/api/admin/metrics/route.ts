@@ -109,7 +109,7 @@ export async function GET() {
     const studentMap = new Map<string, { notesCount: number; lastActive: string }>();
 
     const recentNotes = allNotes.map((note) => {
-      const meta = (note.metadata as Record<string, any>) || {};
+      const meta = (note.metadata as { modelUsed?: string; metrics?: Record<string, unknown> } | null) || {};
       const metrics = meta.metrics || {};
       const modelUsed = meta.modelUsed || 'gemini-3.6-flash';
       const audioDuration = Number(metrics.audioDurationSeconds) || 0;

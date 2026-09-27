@@ -610,8 +610,15 @@ export default function Home() {
       let pdfKey: string | undefined;
 
       if (compressedAudio || audioFile) {
-        setStatusMessage(outputLanguage === 'pt' ? 'A enviar áudio para Cloudflare R2...' : 'Streaming audio binary to Cloudflare R2...');
         const fileToUpload = compressedAudio || audioFile!;
+        if (!compressedAudio && fileToUpload.size > 25 * 1024 * 1024) {
+          throw new Error(
+            outputLanguage === 'pt'
+              ? 'O áudio excede o limite de 25MB da transcrição e precisa de ser comprimido.'
+              : 'The audio exceeds the 25MB transcription limit and must be compressed.'
+          );
+        }
+        setStatusMessage(outputLanguage === 'pt' ? 'A enviar áudio para Cloudflare R2...' : 'Streaming audio binary to Cloudflare R2...');
         audioKey = await uploadToStorage(fileToUpload, 'audio/mp3');
       }
 

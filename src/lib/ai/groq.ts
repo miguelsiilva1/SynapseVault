@@ -13,6 +13,11 @@ export async function transcribeAudioStream(
   fileName: string = 'lecture.mp3',
   language: string = 'pt'
 ): Promise<TranscriptionResult> {
+  const MAX_AUDIO_BYTES = 25 * 1024 * 1024;
+  if (audioBuffer.byteLength > MAX_AUDIO_BYTES) {
+    throw new Error('Audio exceeds the 25MB transcription limit and must be compressed.');
+  }
+
   const apiKey = process.env.GROQ_API_KEY;
   if (!apiKey) {
     throw new Error('GROQ_API_KEY environment variable is not defined.');

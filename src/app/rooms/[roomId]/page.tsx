@@ -1144,8 +1144,21 @@ export default function RoomWorkspacePage({
         throw new Error(data.error || 'Failed to delete folder.');
       }
 
-      setFolders((prev) => prev.filter((item) => item.id !== f.id && item.parent_id !== f.id));
-      if (selectedFolderId === f.id) {
+      // Collect the folder and all its descendants (DB cascades; mirror it in state)
+      const deletedIds = new Set<string>([f.id]);
+      let added = true;
+      while (added) {
+        added = false;
+        for (const item of folders) {
+          if (item.parent_id && deletedIds.has(item.parent_id) && !deletedIds.has(item.id)) {
+            deletedIds.add(item.id);
+            added = true;
+          }
+        }
+      }
+
+      setFolders((prev) => prev.filter((item) => !deletedIds.has(item.id)));
+      if (selectedFolderId && deletedIds.has(selectedFolderId)) {
         setSelectedFolderId(f.parent_id || null);
       }
     } catch (err) {

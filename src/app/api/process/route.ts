@@ -49,7 +49,7 @@ export async function POST(req: Request) {
     }
 
     // Step 1: Execute speech transcription and PDF parsing in parallel
-    const [audioResult, pdfResult] = await Promise.all([
+    const [audioSettled, pdfSettled] = await Promise.allSettled([
       (async () => {
         if (!audioKey) return { text: '', duration: 0 };
         const audioBuffer = await downloadFileAsBuffer(audioKey);
@@ -69,6 +69,37 @@ export async function POST(req: Request) {
       activeAudioKey ? deleteFileFromR2(activeAudioKey) : Promise.resolve(),
       activePdfKey ? deleteFileFromR2(activePdfKey) : Promise.resolve(),
     ]);
+
+    const warnings: string[] = [];
+
+    if (audioKey && audioSettled.status === 'rejected') {
+      const err = audioSettled.reason;
+      warnings.push(err instanceof Error ? err.message : 'Audio transcription failed.');
+    }
+
+    if (pdfKey && pdfSettled.status === 'rejected') {
+      const err = pdfSettled.reason;
+      warnings.push(err instanceof Error ? err.message : 'PDF extraction failed.');
+    }
+
+    const hasAudio = Boolean(audioKey) && audioSettled.status === 'fulfilled';
+    const hasPdf = Boolean(pdfKey) && pdfSettled.status === 'fulfilled';
+    const hasRawMarkdown = Boolean(rawMarkdown && rawMarkdown.trim());
+
+    if (!hasAudio && !hasPdf && !hasRawMarkdown) {
+      const firstError =
+        (audioSettled.status === 'rejected' ? audioSettled.reason : null) ||
+        (pdfSettled.status === 'rejected' ? pdfSettled.reason : null) ||
+        new Error('No usable input artifact remained.');
+      throw firstError;
+    }
+
+    const audioResult = audioSettled.status === 'fulfilled'
+      ? audioSettled.value
+      : { text: '', duration: 0 };
+    const pdfResult = pdfSettled.status === 'fulfilled'
+      ? pdfSettled.value
+      : { text: '', totalPages: 0 };
 
     // Step 3: Combine slides text with any provided raw markdown summaries
     const combinedReferenceText = [
@@ -114,6 +145,7 @@ export async function POST(req: Request) {
       markdown: synthesis.markdown,
       modelUsed: synthesis.modelUsed,
       noteId: dbPersist.id,
+      ...(warnings.length > 0 ? { warnings } : {}),
       metrics: {
         audioDurationSeconds: audioResult.duration,
         pdfPagesProcessed: pdfResult.totalPages,

@@ -1423,19 +1423,19 @@ export default function RoomWorkspacePage({
                   )}
 
                   {isProj ? (
-                    <Users className={`w-3.5 h-3.5 flex-shrink-0 ${isSelected ? 'text-emerald-400' : 'text-emerald-500/80'}`} />
+                    <Users className={`w-3.5 h-3.5 shrink-0 ${isSelected ? 'text-emerald-400' : 'text-emerald-500/80'}`} />
                   ) : isWeek ? (
-                    <Calendar className={`w-3.5 h-3.5 flex-shrink-0 ${isSelected ? 'text-indigo-400' : 'text-amber-400/80'}`} />
+                    <Calendar className={`w-3.5 h-3.5 shrink-0 ${isSelected ? 'text-indigo-400' : 'text-amber-400/80'}`} />
                   ) : isSec ? (
-                    <Layers className={`w-3.5 h-3.5 flex-shrink-0 ${isSelected ? 'text-indigo-400' : 'text-indigo-500/80'}`} />
+                    <Layers className={`w-3.5 h-3.5 shrink-0 ${isSelected ? 'text-indigo-400' : 'text-indigo-500/80'}`} />
                   ) : (
-                    <Folder className="w-3.5 h-3.5 text-slate-500 flex-shrink-0" />
+                    <Folder className="w-3.5 h-3.5 text-slate-500 shrink-0" />
                   )}
 
                   <span className="truncate text-xs" title={sub.name}>{sub.name}</span>
                 </div>
 
-                <div className="flex items-center space-x-1 flex-shrink-0">
+                <div className="flex items-center space-x-1 shrink-0">
                   {noteCount > 0 && (
                     <span className="px-1.5 py-0.2 rounded-full text-[9px] font-mono bg-slate-800 text-slate-400 font-bold">
                       {noteCount}
@@ -1511,7 +1511,7 @@ export default function RoomWorkspacePage({
           </Link>
 
           <div className="flex items-center space-x-2.5">
-            <div className="p-1.5 bg-gradient-to-tr from-indigo-600 to-violet-500 rounded-lg shadow-md shadow-indigo-500/20">
+            <div className="p-1.5 bg-linear-to-tr from-indigo-600 to-violet-500 rounded-lg shadow-md shadow-indigo-500/20">
               <FolderTree className="w-4 h-4 text-white" />
             </div>
             <div>
@@ -1613,7 +1613,7 @@ export default function RoomWorkspacePage({
           {currentUser?.email && (
             <div className="flex items-center space-x-1.5 bg-slate-900 border border-slate-800 px-2.5 py-1 rounded-lg text-xs font-mono text-slate-300">
               <ShieldCheck className="w-3.5 h-3.5 text-emerald-400" />
-              <span className="max-w-[130px] truncate">{currentUser.email}</span>
+              <span className="max-w-32.5 truncate">{currentUser.email}</span>
             </div>
           )}
         </div>
@@ -1624,7 +1624,7 @@ export default function RoomWorkspacePage({
         {/* Left Column: Resizable Academic Hierarchy Tree */}
         <aside
           style={{ width: `${sidebarWidth}px` }}
-          className="relative bg-slate-950 border-r border-slate-800/80 flex flex-col p-4 space-y-4 overflow-y-auto flex-shrink-0 select-text"
+          className="relative bg-slate-950 border-r border-slate-800/80 flex flex-col p-4 space-y-4 overflow-y-auto shrink-0 select-text"
         >
           {/* Drag Resizer Bar */}
           <div
@@ -1632,7 +1632,7 @@ export default function RoomWorkspacePage({
             title={outputLanguage === 'pt' ? 'Arrasta para redimensionar barra' : 'Drag to resize sidebar'}
             className="absolute top-0 right-0 w-2 h-full cursor-col-resize hover:bg-indigo-500/40 active:bg-indigo-500 transition-colors z-20 flex items-center justify-center group select-none"
           >
-            <div className="w-[2px] h-8 bg-slate-700 group-hover:bg-indigo-400 rounded-full transition-colors" />
+            <div className="w-0.5 h-8 bg-slate-700 group-hover:bg-indigo-400 rounded-full transition-colors" />
           </div>
 
           <div className="flex items-center justify-between text-xs font-mono font-semibold uppercase tracking-wider text-slate-400 pb-2 border-b border-slate-800">
@@ -1732,7 +1732,7 @@ export default function RoomWorkspacePage({
                                           )}
 
                                           <BookOpen
-                                            className={`w-3.5 h-3.5 flex-shrink-0 ${
+                                            className={`w-3.5 h-3.5 shrink-0 ${
                                               isSelected ? 'text-indigo-400' : 'text-slate-500'
                                             }`}
                                           />
@@ -1741,7 +1741,7 @@ export default function RoomWorkspacePage({
                                           </span>
                                         </div>
 
-                                        <div className="flex items-center space-x-1 flex-shrink-0">
+                                        <div className="flex items-center space-x-1 shrink-0">
                                           {noteCount > 0 && (
                                             <span className="px-1.5 py-0.2 rounded-full text-[9px] font-mono bg-slate-800 text-slate-400 font-bold">
                                               {noteCount}
@@ -1829,10 +1829,10 @@ export default function RoomWorkspacePage({
                     key={m.id}
                     className="flex items-center justify-between text-slate-400 bg-slate-900/50 hover:bg-slate-900 px-2 py-1.5 rounded transition-colors gap-1.5"
                   >
-                    <span className="truncate max-w-[150px]" title={m.user_email}>
+                    <span className="truncate max-w-37.5" title={m.user_email}>
                       {m.user_email}
                     </span>
-                    <div className="flex items-center space-x-1 flex-shrink-0">
+                    <div className="flex items-center space-x-1 shrink-0">
                       <span className="text-[9px] uppercase font-bold text-slate-500">
                         {isMemberOwner
                           ? outputLanguage === 'pt'
@@ -2029,7 +2029,7 @@ export default function RoomWorkspacePage({
                         <textarea
                           value={fullLogDraft}
                           onChange={(e) => setFullLogDraft(e.target.value)}
-                          className="flex-1 w-full bg-slate-900 border border-slate-800 rounded-xl p-4 text-xs font-mono text-slate-200 leading-relaxed focus:outline-none focus:border-emerald-500 resize-none min-h-[350px]"
+                          className="flex-1 w-full bg-slate-900 border border-slate-800 rounded-xl p-4 text-xs font-mono text-slate-200 leading-relaxed focus:outline-none focus:border-emerald-500 resize-none min-h-87.5"
                         />
                         <div className="flex items-center justify-end space-x-2">
                           <button
@@ -2296,7 +2296,7 @@ export default function RoomWorkspacePage({
                                 ? 'Clica aqui para escrever ou editar as tuas notas em Markdown...'
                                 : 'Click here to write or edit your notes in Markdown...'
                             }
-                            className="w-full flex-1 min-h-[600px] bg-transparent text-slate-200 font-sans text-sm leading-relaxed resize-none border-0 focus:outline-none focus:ring-0 p-0 placeholder-slate-600 selection:bg-indigo-600/30 whitespace-pre-wrap"
+                            className="w-full flex-1 min-h-150 bg-transparent text-slate-200 font-sans text-sm leading-relaxed resize-none border-0 focus:outline-none focus:ring-0 p-0 placeholder-slate-600 selection:bg-indigo-600/30 whitespace-pre-wrap"
                             spellCheck={false}
                           />
                         </div>
@@ -2539,7 +2539,7 @@ export default function RoomWorkspacePage({
                             <div className="flex items-center justify-between text-[11px] font-mono text-slate-400">
                               <span className="flex items-center space-x-1 text-emerald-300">
                                 <User className="w-3 h-3" />
-                                <span className="truncate max-w-[180px]">{note.author_email}</span>
+                                <span className="truncate max-w-45">{note.author_email}</span>
                               </span>
                               <span>
                                 {new Date(note.imported_at).toLocaleDateString(
@@ -3063,7 +3063,7 @@ export default function RoomWorkspacePage({
                                 ? 'Clica aqui para escrever ou editar notas em Markdown...'
                                 : 'Click here to write or edit notes in Markdown...'
                             }
-                            className="w-full flex-1 min-h-[600px] bg-transparent text-slate-200 font-sans text-sm leading-relaxed resize-none border-0 focus:outline-none focus:ring-0 p-0 placeholder-slate-600 selection:bg-indigo-600/30 whitespace-pre-wrap"
+                            className="w-full flex-1 min-h-150 bg-transparent text-slate-200 font-sans text-sm leading-relaxed resize-none border-0 focus:outline-none focus:ring-0 p-0 placeholder-slate-600 selection:bg-indigo-600/30 whitespace-pre-wrap"
                             spellCheck={false}
                           />
                         </div>
@@ -3334,7 +3334,7 @@ export default function RoomWorkspacePage({
                               <div className="flex items-center justify-between text-[11px] font-mono text-slate-400">
                                 <span className="flex items-center space-x-1 text-indigo-300">
                                   <User className="w-3 h-3" />
-                                  <span className="truncate max-w-[150px]">{note.author_email}</span>
+                                  <span className="truncate max-w-37.5">{note.author_email}</span>
                                 </span>
                                 {noteFolder && noteFolder.id !== activeFolder.id && (
                                   <span className="px-1.5 py-0.5 rounded bg-amber-950/60 border border-amber-700/60 text-amber-300 text-[10px] font-bold">
@@ -3603,7 +3603,7 @@ export default function RoomWorkspacePage({
                     }
                     value={targetWeekSelection}
                     onChange={(e) => setTargetWeekSelection(e.target.value)}
-                    className="flex-1 min-w-[130px] bg-slate-950 border border-slate-700 rounded px-2 py-1 text-xs text-white placeholder-slate-500 font-mono focus:outline-none focus:border-indigo-500"
+                    className="flex-1 min-w-32.5 bg-slate-950 border border-slate-700 rounded px-2 py-1 text-xs text-white placeholder-slate-500 font-mono focus:outline-none focus:border-indigo-500"
                   />
                 </div>
               </div>
@@ -3643,7 +3643,7 @@ export default function RoomWorkspacePage({
                             : 'bg-slate-950 border-slate-800'
                         }`}
                       >
-                        <div className="space-y-1 max-w-[420px]">
+                        <div className="space-y-1 max-w-105">
                           <div className="flex items-center space-x-2">
                             <span className="px-1.5 py-0.2 bg-slate-800 text-slate-300 font-mono text-[10px] font-bold rounded">
                               {pNote.course_code}

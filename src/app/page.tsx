@@ -828,7 +828,7 @@ $$
       <header className="border-b border-slate-800/80 bg-slate-950/90 backdrop-blur sticky top-0 z-40 px-6 py-3 flex flex-wrap items-center justify-between gap-4">
         {/* Brand Left */}
         <div className="flex items-center space-x-3">
-          <div className="p-2 bg-gradient-to-tr from-indigo-600 to-violet-500 rounded-xl shadow-md shadow-indigo-600/20">
+          <div className="p-2 bg-linear-to-tr from-indigo-600 to-violet-500 rounded-xl shadow-md shadow-indigo-600/20">
             <Cpu className="w-4 h-4 text-white" />
           </div>
           <div>
@@ -912,7 +912,7 @@ $$
           {/* Model Selector (Only displayed when authenticated) */}
           {currentUser && (
             <div className="flex items-center bg-slate-900 border border-slate-800 rounded-lg px-2 py-1 text-xs font-mono">
-              <Sparkles className="w-3.5 h-3.5 text-indigo-400 mr-1.5 flex-shrink-0" />
+              <Sparkles className="w-3.5 h-3.5 text-indigo-400 mr-1.5 shrink-0" />
               <select
                 value={modelPreset}
                 onChange={(e) => setModelPreset(e.target.value)}
@@ -946,7 +946,7 @@ $$
 
               <div className="flex items-center space-x-2 bg-slate-900 border border-slate-800 rounded-lg px-2.5 py-1 text-xs">
                 <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
-                <span className="text-slate-300 max-w-[130px] truncate font-mono text-[11px]">{currentUser.email}</span>
+                <span className="text-slate-300 max-w-32.5 truncate font-mono text-[11px]">{currentUser.email}</span>
                 <button
                   onClick={handleSignOut}
                   title={outputLanguage === 'pt' ? 'Terminar Sessão' : 'Sign Out'}
@@ -1397,7 +1397,7 @@ $$
               {synthesizedMarkdown ? (
                 <pre className="whitespace-pre-wrap select-text">{synthesizedMarkdown}</pre>
               ) : (
-                <div className="h-full min-h-[420px] flex flex-col items-center justify-center text-center p-6 text-slate-500">
+                <div className="h-full min-h-105 flex flex-col items-center justify-center text-center p-6 text-slate-500">
                   <Cpu className="w-12 h-12 text-slate-700 mb-3 stroke-[1.5]" />
                   <p className="font-sans text-sm font-medium text-slate-400">
                     {outputLanguage === 'pt' ? 'Nenhuma nota gerada ainda' : 'No note synthesized yet'}
@@ -1551,22 +1551,22 @@ $$
                         >
                           <div className="flex items-center space-x-2 truncate pr-2">
                             {isExpanded ? (
-                              <ChevronDown className="w-3.5 h-3.5 text-indigo-400 flex-shrink-0" />
+                              <ChevronDown className="w-3.5 h-3.5 text-indigo-400 shrink-0" />
                             ) : (
-                              <ChevronRight className="w-3.5 h-3.5 text-slate-500 flex-shrink-0" />
+                              <ChevronRight className="w-3.5 h-3.5 text-slate-500 shrink-0" />
                             )}
                             {isExpanded ? (
-                              <FolderOpen className="w-4 h-4 text-amber-400 flex-shrink-0" />
+                              <FolderOpen className="w-4 h-4 text-amber-400 shrink-0" />
                             ) : (
-                              <Folder className="w-4 h-4 text-amber-500/80 flex-shrink-0" />
+                              <Folder className="w-4 h-4 text-amber-500/80 shrink-0" />
                             )}
                             <span className="font-bold text-white text-xs">{courseCode}</span>
-                            <span className="text-slate-400 text-xs truncate max-w-[170px]">
+                            <span className="text-slate-400 text-xs truncate max-w-42.5">
                               - {courseDisplayName}
                             </span>
                           </div>
 
-                          <span className="px-1.5 py-0.2 rounded-full text-[10px] font-bold bg-indigo-950 text-indigo-300 border border-indigo-800/60 flex-shrink-0">
+                          <span className="px-1.5 py-0.2 rounded-full text-[10px] font-bold bg-indigo-950 text-indigo-300 border border-indigo-800/60 shrink-0">
                             {courseNotes.length}
                           </span>
                         </button>
@@ -1601,7 +1601,7 @@ $$
                                         onClick={() => handleSaveNoteTitle(note.id)}
                                         disabled={isSavingTitle || !editingTitle.trim()}
                                         title={outputLanguage === 'pt' ? 'Guardar' : 'Save'}
-                                        className="p-1 bg-emerald-600 hover:bg-emerald-500 text-white rounded transition-colors cursor-pointer flex-shrink-0 disabled:opacity-50"
+                                        className="p-1 bg-emerald-600 hover:bg-emerald-500 text-white rounded transition-colors cursor-pointer shrink-0 disabled:opacity-50"
                                       >
                                         <Check className="w-3.5 h-3.5" />
                                       </button>
@@ -1609,14 +1609,14 @@ $$
                                         onClick={() => setEditingNoteId(null)}
                                         disabled={isSavingTitle}
                                         title={outputLanguage === 'pt' ? 'Cancelar' : 'Cancel'}
-                                        className="p-1 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded transition-colors cursor-pointer flex-shrink-0"
+                                        className="p-1 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded transition-colors cursor-pointer shrink-0"
                                       >
                                         <X className="w-3.5 h-3.5" />
                                       </button>
                                     </div>
                                   ) : (
                                     <h4
-                                      className="text-xs font-bold text-white leading-snug break-words"
+                                      className="text-xs font-bold text-white leading-snug wrap-break-word"
                                       title={note.title}
                                     >
                                       {note.title}
@@ -1633,7 +1633,7 @@ $$
                                     </div>
 
                                     {editingNoteId !== note.id && (
-                                      <div className="flex items-center space-x-1 flex-shrink-0">
+                                      <div className="flex items-center space-x-1 shrink-0">
                                         {/* 1. Rename Note */}
                                         <button
                                           onClick={() => {

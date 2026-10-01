@@ -123,7 +123,7 @@ export default function AdminDashboardPage() {
           </Link>
 
           <div className="flex items-center space-x-2.5">
-            <div className="p-1.5 bg-gradient-to-tr from-indigo-600 to-violet-500 rounded-lg shadow-md shadow-indigo-500/20">
+            <div className="p-1.5 bg-linear-to-tr from-indigo-600 to-violet-500 rounded-lg shadow-md shadow-indigo-500/20">
               <Activity className="w-4 h-4 text-white" />
             </div>
             <div>
@@ -162,7 +162,7 @@ export default function AdminDashboardPage() {
         {/* Error Banner */}
         {error && (
           <div className="p-4 bg-rose-950/40 border border-rose-900/60 rounded-xl flex items-center space-x-3 text-rose-300 text-xs">
-            <AlertCircle className="w-4 h-4 flex-shrink-0" />
+            <AlertCircle className="w-4 h-4 shrink-0" />
             <span>{error}</span>
           </div>
         )}
@@ -496,10 +496,10 @@ export default function AdminDashboardPage() {
                             {note.courseCode}
                           </span>
                         </td>
-                        <td className="py-2.5 text-white max-w-[220px] truncate" title={note.title}>
+                        <td className="py-2.5 text-white max-w-55 truncate" title={note.title}>
                           {note.title}
                         </td>
-                        <td className="py-2.5 text-slate-400 max-w-[160px] truncate" title={note.authorEmail}>
+                        <td className="py-2.5 text-slate-400 max-w-40 truncate" title={note.authorEmail}>
                           {note.authorEmail}
                         </td>
                         <td className="py-2.5 text-indigo-300 whitespace-nowrap text-[11px]">

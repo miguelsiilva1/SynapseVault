@@ -972,7 +972,7 @@ $$
               placeholder="e.g. gemini-3.8-flash or gemini-exp"
               value={customModelId}
               onChange={(e) => setCustomModelId(e.target.value)}
-              className="bg-slate-950 border border-slate-700 rounded px-2.5 py-1 text-white font-mono text-xs w-64 focus:outline-none focus:border-indigo-500"
+              className="bg-slate-950 border border-slate-700 rounded px-2.5 py-1 text-white font-mono text-xs w-64 focus:outline-none focus:ring-1 focus:ring-indigo-500"
             />
           </div>
           <span className="text-slate-500">Active model target: {activeModelName}</span>
@@ -1266,7 +1266,7 @@ $$
                 }
                 value={pastedMarkdown}
                 onChange={(e) => setPastedMarkdown(e.target.value)}
-                className="w-full bg-slate-950 border border-slate-800 rounded-lg p-2.5 text-xs text-slate-200 placeholder-slate-500 font-mono focus:outline-none focus:border-indigo-500 leading-relaxed"
+                className="w-full bg-slate-950 border border-slate-800 rounded-lg p-2.5 text-xs text-slate-200 placeholder-slate-500 font-mono focus:outline-none focus:ring-1 focus:ring-indigo-500 leading-relaxed"
               />
 
               {pastedMarkdown.trim() && (

@@ -22,6 +22,27 @@ export function getR2Client(): S3Client {
 }
 
 /**
+ * Builds the storage key for an upload. Keys are scoped to the uploading user,
+ * so a key can later be checked against the caller with isUserUploadKey.
+ */
+export function buildUserUploadKey(userId: string, courseId: string, fileName: string): string {
+  const safeCourseId = courseId.replace(/[^a-zA-Z0-9_-]/g, '_');
+  const safeFileName = fileName.replace(/[^a-zA-Z0-9._-]/g, '_');
+  return `uploads/${userId}/${safeCourseId}/${Date.now()}-${safeFileName}`;
+}
+
+/**
+ * Checks that a storage key was issued to this user by buildUserUploadKey.
+ */
+export function isUserUploadKey(userId: string, key: unknown): key is string {
+  return (
+    typeof key === 'string' &&
+    key.startsWith(`uploads/${userId}/`) &&
+    !key.split('/').includes('..')
+  );
+}
+
+/**
  * Generates an expiring presigned PUT URL for direct client-to-storage binary streaming.
  */
 export async function generatePresignedUploadUrl(

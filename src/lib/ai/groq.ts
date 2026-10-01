@@ -10,8 +10,7 @@ export interface TranscriptionResult {
  */
 export async function transcribeAudioStream(
   audioBuffer: ArrayBuffer,
-  fileName: string = 'lecture.mp3',
-  language: string = 'pt'
+  fileName: string = 'lecture.mp3'
 ): Promise<TranscriptionResult> {
   const MAX_AUDIO_BYTES = 25 * 1024 * 1024;
   if (audioBuffer.byteLength > MAX_AUDIO_BYTES) {
@@ -31,7 +30,6 @@ export async function transcribeAudioStream(
   const transcription = await groq.audio.transcriptions.create({
     file: audioFile,
     model: 'whisper-large-v3-turbo',
-    language,
     response_format: 'verbose_json',
     temperature: 0.0,
   });

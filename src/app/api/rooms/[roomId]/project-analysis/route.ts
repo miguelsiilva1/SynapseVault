@@ -61,7 +61,7 @@ export async function POST(
     const body = await req.json();
     const { folderId, sourceText, projectName, courseCode, outputLanguage } = body;
 
-    if (!folderId || !sourceText || !sourceText.trim()) {
+    if (!folderId || typeof sourceText !== 'string' || !sourceText.trim()) {
       return NextResponse.json({ error: 'folderId e sourceText são obrigatórios.' }, { status: 400 });
     }
 
@@ -72,8 +72,11 @@ export async function POST(
     }
 
     const folder = details.folders?.find((f) => f.id === folderId);
-    const resolvedName = projectName || folder?.name || 'Projeto';
-    const resolvedCode = courseCode || folder?.course_code || '';
+    if (!folder) {
+      return NextResponse.json({ error: 'Pasta não encontrada nesta sala.' }, { status: 404 });
+    }
+    const resolvedName = projectName || folder.name || 'Projeto';
+    const resolvedCode = courseCode || folder.course_code || '';
 
     const synthesis = await generateProjectGuidelinesSynthesis({
       projectName: resolvedName,

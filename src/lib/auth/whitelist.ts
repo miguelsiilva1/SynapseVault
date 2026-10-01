@@ -63,7 +63,7 @@ export function isUserAuthorized(email?: string | null): WhitelistCheckResult {
 export function isUserAdmin(email?: string | null): boolean {
   if (!email) return false;
   const normalizedEmail = email.trim().toLowerCase();
-  const rawAdminEmails = process.env.ADMIN_EMAILS || process.env.NEXT_PUBLIC_ADMIN_EMAILS || '';
+  const rawAdminEmails = process.env.ADMIN_EMAILS || '';
   if (!rawAdminEmails) return false;
   const admins = rawAdminEmails
     .split(',')

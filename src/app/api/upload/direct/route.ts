@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { uploadBufferToR2 } from '@/lib/storage/r2';
+import { uploadBufferToR2, buildUserUploadKey } from '@/lib/storage/r2';
 import { enforceAuthGuard } from '@/lib/auth/guard';
 
 const ALLOWED_MIME_TYPES = new Set([
@@ -45,8 +45,7 @@ export async function POST(req: Request) {
       );
     }
 
-    const sanitizedFileName = file.name.replace(/[^a-zA-Z0-9._-]/g, '_');
-    const storageKey = `courses/${courseId}/${Date.now()}-${sanitizedFileName}`;
+    const storageKey = buildUserUploadKey(auth.userId!, courseId, file.name);
 
     const buffer = await file.arrayBuffer();
     await uploadBufferToR2(storageKey, Buffer.from(buffer), fileType);

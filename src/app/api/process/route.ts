@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { downloadFileAsBuffer, deleteFileFromR2 } from '@/lib/storage/r2';
+import { downloadFileAsBuffer, deleteFileFromR2, isUserUploadKey } from '@/lib/storage/r2';
 import { transcribeAudioStream } from '@/lib/ai/groq';
 import { extractPdfText } from '@/lib/pdf/extractText';
 import { synthesizeObsidianNote } from '@/lib/ai/gemini';
@@ -31,6 +31,17 @@ export async function POST(req: Request) {
       outputLanguage,
     } = body;
 
+    // Only accept storage keys that were issued to this user by the upload routes
+    if (
+      (audioKey && !isUserUploadKey(auth.userId!, audioKey)) ||
+      (pdfKey && !isUserUploadKey(auth.userId!, pdfKey))
+    ) {
+      return NextResponse.json(
+        { error: 'Forbidden. Storage key does not belong to the current user.' },
+        { status: 403 }
+      );
+    }
+
     activeAudioKey = audioKey;
     activePdfKey = pdfKey;
 
@@ -53,7 +64,7 @@ export async function POST(req: Request) {
       (async () => {
         if (!audioKey) return { text: '', duration: 0 };
         const audioBuffer = await downloadFileAsBuffer(audioKey);
-        const transcription = await transcribeAudioStream(audioBuffer, 'lecture.mp3', outputLanguage || 'pt');
+        const transcription = await transcribeAudioStream(audioBuffer, 'lecture.mp3');
         return { text: transcription.text, duration: transcription.durationSeconds };
       })(),
       (async () => {
@@ -139,6 +150,10 @@ export async function POST(req: Request) {
         },
       },
     });
+
+    if (dbPersist.error) {
+      warnings.push(`Note was generated but not saved: ${dbPersist.error}`);
+    }
 
     return NextResponse.json({
       success: true,

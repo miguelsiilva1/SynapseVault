@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { enforceAdminGuard } from '@/lib/auth/guard';
+import { isUserAdmin } from '@/lib/auth/whitelist';
 import { createAdminSupabaseClient } from '@/lib/supabase/admin';
 
 export const dynamic = 'force-dynamic';
@@ -51,6 +52,7 @@ export interface AdminMetricsResponse {
   }>;
   studentBreakdown: Array<{
     email: string;
+    isAdmin: boolean;
     notesCount: number;
     lastActive: string;
   }>;
@@ -232,6 +234,7 @@ export async function GET() {
       })),
       studentBreakdown: Array.from(studentMap.entries()).map(([email, stat]) => ({
         email,
+        isAdmin: isUserAdmin(email),
         notesCount: stat.notesCount,
         lastActive: stat.lastActive,
       })),

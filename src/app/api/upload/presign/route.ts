@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { generatePresignedUploadUrl } from '@/lib/storage/r2';
+import { generatePresignedUploadUrl, buildUserUploadKey } from '@/lib/storage/r2';
 import { enforceAuthGuard } from '@/lib/auth/guard';
 
 const ALLOWED_MIME_TYPES = new Set([
@@ -46,8 +46,7 @@ export async function POST(req: Request) {
       );
     }
 
-    const sanitizedFileName = fileName.replace(/[^a-zA-Z0-9._-]/g, '_');
-    const storageKey = `courses/${courseId}/${Date.now()}-${sanitizedFileName}`;
+    const storageKey = buildUserUploadKey(auth.userId!, String(courseId), String(fileName));
 
     const { uploadUrl, fileKey } = await generatePresignedUploadUrl(storageKey, fileType, 900);
 

@@ -34,7 +34,6 @@ import {
 
 import { compressAudio } from '@/lib/audio/compressAudio';
 import { createClient } from '@/lib/supabase/client';
-import { isUserAdmin } from '@/lib/auth/whitelist';
 import type { PersonalNoteRecord } from '@/lib/db/notes';
 
 
@@ -101,6 +100,7 @@ export default function Home() {
   // Auth State
   const [currentUser, setCurrentUser] = useState<{ email?: string } | null>(null);
   const [authLoading, setAuthLoading] = useState(true);
+  const [isAdmin, setIsAdmin] = useState(false);
   const [authEmailInput, setAuthEmailInput] = useState('');
   const [authMessage, setAuthMessage] = useState('');
 
@@ -220,6 +220,26 @@ export default function Home() {
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps -- reload only when the user changes
   }, [currentUser]);
+
+  // Ask the server whether the signed-in user is an administrator
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      let admin = false;
+      if (currentUser?.email) {
+        try {
+          const res = await fetch('/api/me');
+          if (res.ok) admin = Boolean((await res.json()).isAdmin);
+        } catch {
+          // non-blocking
+        }
+      }
+      if (!cancelled) setIsAdmin(admin);
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [currentUser?.email]);
 
   // Group personal notes by course code
   const groupedPersonalNotes = useMemo(() => {
@@ -913,7 +933,7 @@ $$
           {/* Admin & Profile */}
           {currentUser && (
             <div className="flex items-center space-x-2">
-              {isUserAdmin(currentUser.email) && (
+              {isAdmin && (
                 <Link
                   href="/admin"
                   className="flex items-center space-x-1.5 px-2.5 py-1 bg-indigo-950/80 hover:bg-indigo-900 border border-indigo-700/60 text-indigo-300 hover:text-white rounded-lg text-xs font-mono font-medium transition-colors"

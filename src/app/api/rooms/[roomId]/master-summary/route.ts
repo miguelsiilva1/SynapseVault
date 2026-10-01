@@ -208,9 +208,9 @@ export async function DELETE(
       return NextResponse.json({ error: 'folderId query parameter required.' }, { status: 400 });
     }
 
-    const roomDetails = await getRoomDetails(roomId, auth.email);
-    if (roomDetails.error) {
-      return NextResponse.json({ error: roomDetails.error }, { status: 403 });
+    const access = await verifyRoomFolderAccess({ roomId, folderId, userEmail: auth.email });
+    if (access.error) {
+      return NextResponse.json({ error: access.error }, { status: access.status || 403 });
     }
 
     const res = await deleteFolderMasterSummary(folderId);

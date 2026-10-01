@@ -19,7 +19,6 @@ import {
   CheckCircle2,
 } from 'lucide-react';
 import { createClient } from '@/lib/supabase/client';
-import { isUserAdmin } from '@/lib/auth/whitelist';
 import type { AdminMetricsResponse } from '@/app/api/admin/metrics/route';
 
 export default function AdminDashboardPage() {
@@ -29,6 +28,7 @@ export default function AdminDashboardPage() {
   const [metrics, setMetrics] = useState<AdminMetricsResponse | null>(null);
   const [currentUser, setCurrentUser] = useState<{ email?: string } | null>(null);
   const [authChecked, setAuthChecked] = useState(false);
+  const [accessDenied, setAccessDenied] = useState(false);
 
   // 1. Check user auth & admin status
   useEffect(() => {
@@ -61,6 +61,7 @@ export default function AdminDashboardPage() {
 
     try {
       const res = await fetch('/api/admin/metrics');
+      setAccessDenied(res.status === 401 || res.status === 403);
       if (!res.ok) {
         const errJson = await res.json().catch(() => ({}));
         throw new Error(errJson.error || `HTTP ${res.status}: Access Denied.`);
@@ -82,9 +83,7 @@ export default function AdminDashboardPage() {
   }, [authChecked, fetchMetrics]);
 
   // Unauthorized view
-  const isAdmin = currentUser?.email && isUserAdmin(currentUser.email);
-
-  if (authChecked && !isAdmin && !loading && error) {
+  if (authChecked && accessDenied && !loading) {
     return (
       <div className="min-h-screen bg-slate-950 text-slate-100 flex items-center justify-center p-6">
         <div className="max-w-md w-full bg-slate-900 border border-rose-900/40 rounded-2xl p-8 text-center space-y-5 shadow-2xl">
@@ -391,7 +390,7 @@ export default function AdminDashboardPage() {
                         <tr key={student.email} className="hover:bg-slate-800/30">
                           <td className="py-2.5 text-slate-200 flex items-center space-x-2">
                             <span>{student.email}</span>
-                            {isUserAdmin(student.email) && (
+                            {student.isAdmin && (
                               <span className="px-1.5 py-0.2 text-[9px] bg-indigo-950 text-indigo-300 border border-indigo-700 rounded font-semibold uppercase">
                                 Admin
                               </span>

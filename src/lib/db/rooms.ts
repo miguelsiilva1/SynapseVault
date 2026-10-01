@@ -144,6 +144,16 @@ export async function createStudyRoom(params: {
     if (!supabase) return { error: 'Database unconfigured.' };
 
     const owner = params.ownerEmail.trim().toLowerCase();
+
+    const invited = params.initialMemberEmails
+      .filter((e): e is string => typeof e === 'string')
+      .map((e) => e.trim().toLowerCase())
+      .filter(Boolean);
+    const invalidEmail = invited.find((e) => !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(e));
+    if (invalidEmail) {
+      return { error: `Email inválido: ${invalidEmail}` };
+    }
+
     const slugBase = params.name
       .toLowerCase()
       .normalize('NFD')
@@ -169,9 +179,7 @@ export async function createStudyRoom(params: {
     }
 
     // 2. Add owner and members
-    const allMembers = Array.from(
-      new Set([owner, ...params.initialMemberEmails.map((e) => e.trim().toLowerCase()).filter(Boolean)])
-    );
+    const allMembers = Array.from(new Set([owner, ...invited]));
 
     const memberInserts = allMembers.map((email) => ({
       room_id: room.id,
@@ -179,7 +187,12 @@ export async function createStudyRoom(params: {
       role: email === owner ? 'owner' : 'member',
     }));
 
-    await supabase.from('room_members').insert(memberInserts);
+    const { error: membersErr } = await supabase.from('room_members').insert(memberInserts);
+    if (membersErr) {
+      // A room without its owner row is unreachable, so remove it
+      await supabase.from('study_rooms').delete().eq('id', room.id);
+      return { error: membersErr.message };
+    }
 
     // 3. Bootstrap academic folder tree: 3_Ano -> 1_Semestre -> Cadeiras
     const { data: yearFolder } = await supabase
@@ -980,7 +993,7 @@ export async function appendProjectLogEntry(params: {
     const existingContent =
       existing.log?.content_markdown ||
       '# Caderno de Projeto & Log de Grupo\n\nRegisto cronológico de reuniões, decisões técnicas e tarefas da equipa.\n';
-    const timestamp = new Date().toLocaleString('pt-PT');
+    const timestamp = new Date().toLocaleString('pt-PT', { timeZone: 'Europe/Lisbon' });
     const entry = `\n\n### 💬 ${timestamp} — \`${params.userEmail.split('@')[0]}\`\n${params.message.trim()}\n`;
 
     return await saveProjectLog({
@@ -1125,6 +1138,18 @@ export async function deleteRoomNote(params: {
     if (!supabase) return { error: 'Supabase client unconfigured.' };
 
     const email = params.userEmail.trim().toLowerCase();
+
+    // Removed members lose delete rights, even on their own notes
+    const { data: memberCheck } = await supabase
+      .from('room_members')
+      .select('role')
+      .eq('room_id', params.roomId)
+      .eq('user_email', email)
+      .maybeSingle();
+
+    if (!memberCheck) {
+      return { error: 'Acesso negado. Não és membro desta sala.' };
+    }
 
     // 1. Fetch note
     const { data: note, error: noteErr } = await supabase

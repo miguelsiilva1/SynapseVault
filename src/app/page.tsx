@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import Link from 'next/link';
 import {
   FileAudio,
@@ -35,6 +35,7 @@ import {
 import { compressAudio } from '@/lib/audio/compressAudio';
 import { createClient } from '@/lib/supabase/client';
 import type { PersonalNoteRecord } from '@/lib/db/notes';
+import { renderMarkdown } from '@/lib/utils/markdownRenderer';
 
 
 interface CourseOption {
@@ -59,7 +60,6 @@ const DEFAULT_COURSES: CourseOption[] = [
 const AVAILABLE_MODELS = [
   { id: 'gemini-3.6-flash', label: 'Gemini 3.6 Flash (Fast & Stable)', tag: 'Recommended' },
   { id: 'gemini-3.8-flash', label: 'Gemini 3.8 Flash (Latest Preview)', tag: 'Latest' },
-  { id: 'custom', label: 'Custom Model ID...', tag: 'Advanced' },
 ];
 
 export default function Home() {
@@ -71,7 +71,6 @@ export default function Home() {
 
   // Model Selection
   const [modelPreset, setModelPreset] = useState<string>('gemini-3.6-flash');
-  const [customModelId, setCustomModelId] = useState<string>('');
 
   // Course Creation Modal State
   const [isCreatingCourse, setIsCreatingCourse] = useState(false);
@@ -96,6 +95,14 @@ export default function Home() {
   const [synthesizedMarkdown, setSynthesizedMarkdown] = useState<string | null>(null);
   const [lastSynthesizedKey, setLastSynthesizedKey] = useState<string | null>(null);
   const [copied, setCopied] = useState<boolean>(false);
+  const [viewFormattedNote, setViewFormattedNote] = useState<boolean>(true);
+  const [activeNoteId, setActiveNoteId] = useState<string | null>(null);
+  const [noteSaveStatus, setNoteSaveStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
+  const lastSavedNoteRef = useRef<string>('');
+  const formattedNoteHtml = useMemo(
+    () => (synthesizedMarkdown ? renderMarkdown(synthesizedMarkdown) : ''),
+    [synthesizedMarkdown]
+  );
 
   // Auth State
   const [currentUser, setCurrentUser] = useState<{ email?: string } | null>(null);
@@ -417,7 +424,7 @@ export default function Home() {
     }
   };
 
-  const activeModelName = modelPreset === 'custom' ? customModelId.trim() || 'gemini-3.8-flash' : modelPreset;
+  const activeModelName = modelPreset;
 
   const handleCreateCourse = (e: React.FormEvent) => {
     e.preventDefault();
@@ -585,7 +592,8 @@ export default function Home() {
         throw new Error(data.error || 'Failed to save note.');
       }
 
-      setSynthesizedMarkdown(pastedMarkdown.trim());
+      const saved = await res.json();
+      showNote(pastedMarkdown.trim(), saved.id || null);
       setLastSynthesizedKey(currentInputKey);
       setStatusMessage(
         outputLanguage === 'pt'
@@ -671,7 +679,7 @@ export default function Home() {
       }
 
       const result = await processRes.json();
-      setSynthesizedMarkdown(result.markdown);
+      showNote(result.markdown, result.noteId || null);
       setLastSynthesizedKey(currentInputKey);
       setStatusMessage(outputLanguage === 'pt' ? 'Síntese concluída com sucesso!' : 'Synthesis complete.');
       loadPersonalNotes();
@@ -680,6 +688,34 @@ export default function Home() {
       setErrorMessage(err instanceof Error ? err.message : 'Unknown pipeline error.');
     } finally {
       setIsProcessing(false);
+    }
+  };
+
+  // Shows a note in the output panel. noteId is null for content that is not saved (sample note).
+  const showNote = (markdown: string, noteId: string | null) => {
+    setSynthesizedMarkdown(markdown);
+    setActiveNoteId(noteId);
+    setNoteSaveStatus('idle');
+    lastSavedNoteRef.current = markdown;
+  };
+
+  // Interactive mode: saves edits of the open note when the editor loses focus
+  const handleSaveNoteEdits = async () => {
+    const content = synthesizedMarkdown || '';
+    if (!activeNoteId || !content.trim() || content === lastSavedNoteRef.current) return;
+    setNoteSaveStatus('saving');
+    try {
+      const res = await fetch('/api/notes/personal', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id: activeNoteId, contentMarkdown: content }),
+      });
+      if (!res.ok) throw new Error();
+      lastSavedNoteRef.current = content;
+      setPersonalNotes((prev) => prev.map((n) => (n.id === activeNoteId ? { ...n, content_markdown: content } : n)));
+      setNoteSaveStatus('saved');
+    } catch {
+      setNoteSaveStatus('error');
     }
   };
 
@@ -705,6 +741,7 @@ export default function Home() {
   };
 
   const handleLoadSample = () => {
+    setActiveNoteId(null);
     if (outputLanguage === 'pt') {
       setLectureTitle('Algoritmo de Consenso Raft e Replicação de Estado');
       setSynthesizedMarkdown(`---
@@ -961,23 +998,6 @@ $$
       </header>
 
 
-
-      {/* Custom Model ID Input Bar (when custom is selected) */}
-      {modelPreset === 'custom' && currentUser && (
-        <div className="bg-slate-900/90 border-b border-indigo-900/40 px-6 py-2.5 flex items-center justify-between text-xs">
-          <div className="flex items-center space-x-2">
-            <span className="text-slate-400">Custom Model Identifier:</span>
-            <input
-              type="text"
-              placeholder="e.g. gemini-3.8-flash or gemini-exp"
-              value={customModelId}
-              onChange={(e) => setCustomModelId(e.target.value)}
-              className="bg-slate-950 border border-slate-700 rounded px-2.5 py-1 text-white font-mono text-xs w-64 focus:outline-none focus:ring-1 focus:ring-indigo-500"
-            />
-          </div>
-          <span className="text-slate-500">Active model target: {activeModelName}</span>
-        </div>
-      )}
 
       {/* Auth Gate: If unauthenticated, show locked entry portal */}
       {!currentUser ? (
@@ -1372,8 +1392,37 @@ $$
                 </p>
               </div>
 
-              {synthesizedMarkdown && (
+              {synthesizedMarkdown !== null && (
                 <div className="flex items-center space-x-2">
+                  {!viewFormattedNote && (
+                    <span className="text-[10px] font-mono text-slate-500">
+                      {!activeNoteId
+                        ? outputLanguage === 'pt' ? 'Edição local (não guardada)' : 'Local edit (not saved)'
+                        : noteSaveStatus === 'saving'
+                        ? outputLanguage === 'pt' ? 'A guardar...' : 'Saving...'
+                        : noteSaveStatus === 'saved'
+                        ? outputLanguage === 'pt' ? 'Guardado automaticamente' : 'Auto-saved'
+                        : noteSaveStatus === 'error'
+                        ? outputLanguage === 'pt' ? 'Erro ao guardar' : 'Save error'
+                        : outputLanguage === 'pt' ? 'Edição interativa ativa' : 'Interactive editor active'}
+                    </span>
+                  )}
+                  <button
+                    onClick={() => setViewFormattedNote(!viewFormattedNote)}
+                    title={
+                      viewFormattedNote
+                        ? outputLanguage === 'pt' ? 'Editar o Markdown' : 'Edit the Markdown'
+                        : outputLanguage === 'pt' ? 'Ver Markdown formatado' : 'View formatted Markdown'
+                    }
+                    className="px-2.5 py-1.5 bg-slate-800 hover:bg-slate-700 text-xs font-medium text-slate-200 rounded-md flex items-center space-x-1.5 transition-colors"
+                  >
+                    {viewFormattedNote ? <Pencil className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
+                    <span>
+                      {viewFormattedNote
+                        ? outputLanguage === 'pt' ? 'Modo Interativo' : 'Interactive'
+                        : outputLanguage === 'pt' ? 'Visualização' : 'Preview'}
+                    </span>
+                  </button>
                   <button
                     onClick={handleCopyMarkdown}
                     className="px-2.5 py-1.5 bg-slate-800 hover:bg-slate-700 text-xs font-medium text-slate-200 rounded-md flex items-center space-x-1.5 transition-colors"
@@ -1394,8 +1443,20 @@ $$
 
             {/* Output Body */}
             <div className="flex-1 p-5 overflow-auto font-mono text-xs text-slate-300 leading-relaxed bg-[#0b101e]">
-              {synthesizedMarkdown ? (
-                <pre className="whitespace-pre-wrap select-text">{synthesizedMarkdown}</pre>
+              {synthesizedMarkdown !== null ? (
+                viewFormattedNote ? (
+                  <article className="markdown-body font-sans">
+                    <div dangerouslySetInnerHTML={{ __html: formattedNoteHtml }} />
+                  </article>
+                ) : (
+                  <textarea
+                    value={synthesizedMarkdown}
+                    onChange={(e) => setSynthesizedMarkdown(e.target.value)}
+                    onBlur={handleSaveNoteEdits}
+                    spellCheck={false}
+                    className="w-full h-full min-h-150 bg-transparent text-slate-300 font-mono text-xs leading-relaxed resize-none border-0 focus:outline-none whitespace-pre-wrap"
+                  />
+                )
               ) : (
                 <div className="h-full min-h-105 flex flex-col items-center justify-center text-center p-6 text-slate-500">
                   <Cpu className="w-12 h-12 text-slate-700 mb-3 stroke-[1.5]" />
@@ -1671,7 +1732,7 @@ $$
                                         {/* 4. Load in Studio Editor */}
                                         <button
                                           onClick={() => {
-                                            setSynthesizedMarkdown(note.content_markdown);
+                                            showNote(note.content_markdown, note.id);
                                             setLectureTitle(note.title);
                                             setShowHistoryDrawer(false);
                                           }}

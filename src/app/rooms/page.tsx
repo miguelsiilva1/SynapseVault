@@ -14,6 +14,7 @@ import {
   RefreshCw,
   GraduationCap,
   Globe,
+  Trash2,
 } from 'lucide-react';
 import { createClient } from '@/lib/supabase/client';
 import type { StudyRoomRecord } from '@/lib/db/rooms';
@@ -34,6 +35,7 @@ export default function RoomsHubPage() {
   const [roomDesc, setRoomDesc] = useState('');
   const [memberEmailsInput, setMemberEmailsInput] = useState('');
   const [creating, setCreating] = useState(false);
+  const [deletingRoomId, setDeletingRoomId] = useState<string | null>(null);
 
   // Load language preference
   useEffect(() => {
@@ -100,6 +102,32 @@ export default function RoomsHubPage() {
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps -- reload only when the user changes
   }, [currentUser]);
+
+  // Handle delete room (owner only)
+  const handleDeleteRoom = async (e: React.MouseEvent, room: StudyRoomRecord) => {
+    e.preventDefault();
+    e.stopPropagation();
+    const confirmMsg =
+      outputLanguage === 'pt'
+        ? `Eliminar a sala "${room.name}"? Todas as pastas, aulas, Master Notes e logs desta sala são apagados para todos os membros. Esta ação não pode ser desfeita.`
+        : `Delete the room "${room.name}"? All folders, notes, Master Notes and logs of this room are removed for every member. This cannot be undone.`;
+    if (!window.confirm(confirmMsg)) return;
+
+    setDeletingRoomId(room.id);
+    setError(null);
+    try {
+      const res = await fetch(`/api/rooms/${room.id}`, { method: 'DELETE' });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        throw new Error(data.error || (outputLanguage === 'pt' ? 'Falha ao eliminar sala.' : 'Failed to delete room.'));
+      }
+      setRooms((prev) => prev.filter((r) => r.id !== room.id));
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Erro ao eliminar sala.');
+    } finally {
+      setDeletingRoomId(null);
+    }
+  };
 
   // Handle create room
   const handleCreateRoom = async (e: React.FormEvent) => {
@@ -307,11 +335,27 @@ export default function RoomsHubPage() {
                         ? 'Membro'
                         : 'Member'}
                     </span>
-                    <span className="text-[11px] text-slate-500 font-mono">
-                      {new Date(room.created_at).toLocaleDateString(
-                        outputLanguage === 'pt' ? 'pt-PT' : 'en-US'
+                    <div className="flex items-center space-x-2">
+                      <span className="text-[11px] text-slate-500 font-mono">
+                        {new Date(room.created_at).toLocaleDateString(
+                          outputLanguage === 'pt' ? 'pt-PT' : 'en-US'
+                        )}
+                      </span>
+                      {room.role === 'owner' && (
+                        <button
+                          onClick={(e) => handleDeleteRoom(e, room)}
+                          disabled={deletingRoomId === room.id}
+                          title={outputLanguage === 'pt' ? 'Eliminar sala' : 'Delete room'}
+                          className="p-1.5 rounded text-slate-500 hover:text-rose-300 hover:bg-rose-950/60 transition-colors cursor-pointer disabled:opacity-40"
+                        >
+                          {deletingRoomId === room.id ? (
+                            <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                          ) : (
+                            <Trash2 className="w-3.5 h-3.5" />
+                          )}
+                        </button>
                       )}
-                    </span>
+                    </div>
                   </div>
 
                   <h3 className="text-base font-bold text-white group-hover:text-indigo-300 transition-colors">

@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { enforceAuthGuard } from '@/lib/auth/guard';
-import { getPersonalNotes, deletePersonalNote, updatePersonalNoteTitle, persistNoteToDatabase } from '@/lib/db/notes';
+import { MAX_NOTE_MARKDOWN_CHARS } from '@/lib/limits';
+import { getPersonalNotes, deletePersonalNote, updatePersonalNoteTitle, updatePersonalNoteContent, persistNoteToDatabase } from '@/lib/db/notes';
 
 export const dynamic = 'force-dynamic';
 
@@ -41,7 +42,26 @@ export async function PATCH(req: Request) {
     }
 
     const body = await req.json();
-    const { id, title } = body;
+    const { id, title, contentMarkdown } = body;
+
+    // Content edit (interactive mode in the Studio)
+    if (id && typeof contentMarkdown === 'string') {
+      if (!contentMarkdown.trim()) {
+        return NextResponse.json({ error: 'contentMarkdown cannot be empty.' }, { status: 400 });
+      }
+      if (contentMarkdown.length > MAX_NOTE_MARKDOWN_CHARS) {
+        return NextResponse.json(
+          { error: `contentMarkdown exceeds the limit of ${MAX_NOTE_MARKDOWN_CHARS} characters.` },
+          { status: 413 }
+        );
+      }
+      const updated = await updatePersonalNoteContent(id, contentMarkdown, email);
+      if (updated.error || !updated.success) {
+        return NextResponse.json({ error: updated.error || 'Failed to update note content.' }, { status: 500 });
+      }
+      return NextResponse.json({ success: true });
+    }
+
     if (!id || typeof title !== 'string' || !title.trim()) {
       return NextResponse.json({ error: 'Note ID and valid title required.' }, { status: 400 });
     }
@@ -103,10 +123,17 @@ export async function POST(req: Request) {
     const body = await req.json();
     const { courseName, courseCode, title, lectureDate, contentMarkdown } = body;
 
-    if (!courseCode || !title || !contentMarkdown) {
+    if (!courseCode || typeof title !== 'string' || !title || typeof contentMarkdown !== 'string' || !contentMarkdown) {
       return NextResponse.json(
         { error: 'courseCode, title, and contentMarkdown are required.' },
         { status: 400 }
+      );
+    }
+
+    if (contentMarkdown.length > MAX_NOTE_MARKDOWN_CHARS) {
+      return NextResponse.json(
+        { error: `contentMarkdown exceeds the limit of ${MAX_NOTE_MARKDOWN_CHARS} characters.` },
+        { status: 413 }
       );
     }
 

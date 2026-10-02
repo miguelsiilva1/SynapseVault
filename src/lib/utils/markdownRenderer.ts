@@ -147,13 +147,19 @@ export function renderMarkdown(markdown: string): string {
   if (!markdown) return '';
   let html: string;
   try {
-    const withCallouts = processCallouts(markdown);
+    // YAML frontmatter is shown as a code block; left in place, marked reads it as a heading
+    const frontmatter = markdown.match(/^---\r?\n([\s\S]*?)\r?\n---\r?\n?/);
+    const body = frontmatter ? markdown.slice(frontmatter[0].length) : markdown;
+    const withCallouts = processCallouts(body);
     const withWikiLinks = processWikiLinks(withCallouts);
     const withMath = processMath(withWikiLinks);
     html = marked.parse(withMath, {
       gfm: true,
       breaks: true, // Preserves single newlines as line breaks for handwritten notes and questionnaires
     }) as string;
+    if (frontmatter) {
+      html = (marked.parse('```yaml\n' + frontmatter[1] + '\n```') as string) + html;
+    }
   } catch (err) {
     console.error('Error in renderMarkdown:', err);
     html = marked.parse(markdown, { gfm: true, breaks: true }) as string;

@@ -118,6 +118,38 @@ export async function deletePersonalNote(noteId: string, authorEmail: string): P
 }
 
 /**
+ * Updates a note's markdown content if it belongs to the specified author.
+ */
+export async function updatePersonalNoteContent(
+  noteId: string,
+  contentMarkdown: string,
+  authorEmail: string
+): Promise<{ success: boolean; error?: string }> {
+  try {
+    const supabase = await createServerSupabaseClient();
+    if (!supabase) {
+      return { success: false, error: 'Supabase client unconfigured in environment.' };
+    }
+
+    const { error } = await supabase
+      .from('notes')
+      .update({ content_markdown: contentMarkdown })
+      .eq('id', noteId)
+      .eq('author_email', authorEmail.trim().toLowerCase());
+
+    if (error) {
+      console.warn('[Supabase DB] Failed to update note content:', error.message);
+      return { success: false, error: error.message };
+    }
+
+    return { success: true };
+  } catch (err) {
+    console.warn('[Supabase DB] Error in updatePersonalNoteContent:', err);
+    return { success: false, error: 'Failed to update note content.' };
+  }
+}
+
+/**
  * Updates a note's title and slug if it belongs to the specified author.
  */
 export async function updatePersonalNoteTitle(

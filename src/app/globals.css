@@ -1,74 +1,212 @@
 @import "tailwindcss";
 @import "katex/dist/katex.min.css";
 @plugin "@tailwindcss/typography";
+@custom-variant dark (&:where([data-theme="dark"], [data-theme="dark"] *));
 
+/* ========================================================================= */
+/* THEME TOKENS (light is the default, dark is set with data-theme="dark")   */
+/* ========================================================================= */
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  color-scheme: light;
+
+  --canvas: #f7f7fb;
+  --surface: #ffffff;
+  --raised: #f0f0f6;
+  --raised-strong: #e6e5ef;
+  --line: #e3e2ec;
+  --line-strong: #cfcddd;
+  --ink: #1a1826;
+  --ink-soft: #3a3750;
+  --muted: #62607a;
+  --faint: #8e8ca3;
+
+  --grad-a: #7c4dff;
+  --grad-b: #3b82f6;
+  --accent: #6352f2;
+  --accent-hover: #5343db;
+  --accent-ink: #4f3fd6;
+  --accent-soft: #eeecfe;
+  --accent-line: #cfcafb;
+  --on-accent: #ffffff;
+
+  --ok: #0f7a4d;
+  --ok-solid: #12915c;
+  --ok-soft: #e4f6ec;
+  --ok-line: #b4e2c8;
+  --danger: #c02645;
+  --danger-solid: #d63655;
+  --danger-soft: #fde9ed;
+  --danger-line: #f5bfca;
+  --warn: #96600a;
+  --warn-solid: #d9940f;
+  --warn-soft: #fbf1dc;
+  --warn-line: #ebd39a;
+  --info: #0b6e9e;
+  --info-solid: #0e8cc7;
+  --info-soft: #e2f3fb;
+  --info-line: #b3ddf0;
+
+  --code-bg: #f3f2f9;
+}
+
+:root[data-theme="dark"] {
+  color-scheme: dark;
+
+  --canvas: #100f18;
+  --surface: #181722;
+  --raised: #22202f;
+  --raised-strong: #2d2b3d;
+  --line: #2a2839;
+  --line-strong: #3a3850;
+  --ink: #f1f0f8;
+  --ink-soft: #d5d3e3;
+  --muted: #a09eb6;
+  --faint: #77758d;
+
+  --accent-hover: #7566f7;
+  --accent-ink: #a99fff;
+  --accent-soft: #24213f;
+  --accent-line: #3d3873;
+
+  --ok: #4ade9a;
+  --ok-soft: #13291f;
+  --ok-line: #1f5038;
+  --danger: #fb7c92;
+  --danger-soft: #351620;
+  --danger-line: #6a2436;
+  --warn: #f5c04e;
+  --warn-soft: #33270f;
+  --warn-line: #5e4716;
+  --info: #5cc4f2;
+  --info-soft: #0f2a38;
+  --info-line: #1b4a63;
+
+  --code-bg: #0c0b13;
 }
 
 @theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
-}
+  --color-canvas: var(--canvas);
+  --color-surface: var(--surface);
+  --color-raised: var(--raised);
+  --color-raised-strong: var(--raised-strong);
+  --color-line: var(--line);
+  --color-line-strong: var(--line-strong);
+  --color-ink: var(--ink);
+  --color-ink-soft: var(--ink-soft);
+  --color-muted: var(--muted);
+  --color-faint: var(--faint);
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+  --color-grad-a: var(--grad-a);
+  --color-grad-b: var(--grad-b);
+  --color-accent: var(--accent);
+  --color-accent-hover: var(--accent-hover);
+  --color-accent-ink: var(--accent-ink);
+  --color-accent-soft: var(--accent-soft);
+  --color-accent-line: var(--accent-line);
+  --color-on-accent: var(--on-accent);
+
+  --color-ok: var(--ok);
+  --color-ok-solid: var(--ok-solid);
+  --color-ok-solid-hover: color-mix(in oklab, var(--ok-solid) 88%, black);
+  --color-ok-soft: var(--ok-soft);
+  --color-ok-line: var(--ok-line);
+  --color-danger: var(--danger);
+  --color-danger-solid: var(--danger-solid);
+  --color-danger-solid-hover: color-mix(in oklab, var(--danger-solid) 88%, black);
+  --color-danger-soft: var(--danger-soft);
+  --color-danger-line: var(--danger-line);
+  --color-warn: var(--warn);
+  --color-warn-solid: var(--warn-solid);
+  --color-warn-solid-hover: color-mix(in oklab, var(--warn-solid) 88%, black);
+  --color-warn-soft: var(--warn-soft);
+  --color-warn-line: var(--warn-line);
+  --color-info: var(--info);
+  --color-info-solid: var(--info-solid);
+  --color-info-solid-hover: color-mix(in oklab, var(--info-solid) 88%, black);
+  --color-info-soft: var(--info-soft);
+  --color-info-line: var(--info-line);
+
+  --font-sans: var(--font-instrument-sans), ui-sans-serif, system-ui, sans-serif;
+  --font-mono: var(--font-geist-mono), ui-monospace, monospace;
 }
 
 body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  background: var(--canvas);
+  color: var(--ink);
+  font-family: var(--font-sans);
+}
+
+/* The one place the brand gradient is used as a fill. */
+.bg-brand {
+  background-image: linear-gradient(135deg, var(--grad-a), var(--grad-b));
+}
+
+:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
 }
 
 /* ========================================================================= */
 /* MARKDOWN BODY TYPOGRAPHY & SPACING                                        */
 /* ========================================================================= */
 .markdown-body {
-  color: #e2e8f0;
-  font-size: 0.9375rem;
-  line-height: 1.8;
-  letter-spacing: 0.01em;
+  color: var(--ink-soft);
+  font-size: 1rem;
+  line-height: 1.65;
+}
+
+/* Prose keeps a readable measure; tables, code and formulas may run wider. */
+.markdown-body > div > :not(.tblwrap, pre, .math-block),
+.markdown-body > :not(div, .tblwrap, pre, .math-block) {
+  max-width: 72ch;
+}
+
+.markdown-body strong {
+  color: var(--ink);
+  font-weight: 700;
+}
+
+.markdown-body .sec-n {
+  font-family: var(--font-mono, monospace);
+  font-size: 0.6em;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  color: var(--accent-ink);
+  margin-right: 0.6rem;
+  vertical-align: 0.2em;
 }
 
 .markdown-body p {
   margin-top: 0;
-  margin-bottom: 1.5rem;
-  line-height: 1.8;
+  margin-bottom: 0.85rem;
 }
 
 .markdown-body h1 {
   font-size: 1.85rem;
   font-weight: 700;
-  color: #ffffff;
+  color: var(--ink);
   margin-top: 2.5rem;
   margin-bottom: 1.25rem;
   line-height: 1.3;
   padding-bottom: 0.6rem;
-  border-bottom: 1px solid rgba(51, 65, 85, 0.45);
+  border-bottom: 1px solid var(--line);
 }
 
 .markdown-body h2 {
   font-size: 1.45rem;
   font-weight: 700;
-  color: #f8fafc;
+  color: var(--ink);
   margin-top: 2.25rem;
   margin-bottom: 1rem;
   line-height: 1.35;
   padding-bottom: 0.45rem;
-  border-bottom: 1px solid rgba(51, 65, 85, 0.3);
+  border-bottom: 1px solid var(--line);
 }
 
 .markdown-body h3 {
   font-size: 1.2rem;
   font-weight: 600;
-  color: #f1f5f9;
+  color: var(--ink);
   margin-top: 1.85rem;
   margin-bottom: 0.75rem;
   line-height: 1.4;
@@ -77,7 +215,7 @@ body {
 .markdown-body h4 {
   font-size: 1.05rem;
   font-weight: 600;
-  color: #e2e8f0;
+  color: var(--ink-soft);
   margin-top: 1.5rem;
   margin-bottom: 0.6rem;
 }
@@ -116,15 +254,15 @@ body {
 
 .markdown-body input[type="checkbox"] {
   margin-right: 0.5rem;
-  accent-color: #6366f1;
+  accent-color: var(--accent);
 }
 
 .markdown-body blockquote:not(.callout-box) {
   margin: 1.5rem 0;
   padding: 0.85rem 1.25rem;
-  border-left: 4px solid #6366f1;
-  background: rgba(30, 27, 75, 0.25);
-  color: #cbd5e1;
+  border-left: 3px solid var(--accent);
+  background: var(--accent-soft);
+  color: var(--ink-soft);
   border-radius: 0 0.5rem 0.5rem 0;
   line-height: 1.75;
 }
@@ -132,7 +270,7 @@ body {
 .markdown-body hr {
   margin: 2.25rem 0;
   border: 0;
-  border-top: 1px solid rgba(51, 65, 85, 0.6);
+  border-top: 1px solid var(--line);
 }
 
 .markdown-body code:not(pre code) {
@@ -140,17 +278,17 @@ body {
   font-size: 0.85em;
   padding: 0.2rem 0.45rem;
   border-radius: 0.375rem;
-  background-color: rgba(30, 41, 59, 0.7);
-  border: 1px solid rgba(51, 65, 85, 0.7);
-  color: #a5b4fc;
+  background-color: var(--raised);
+  border: 1px solid var(--line);
+  color: var(--accent-ink);
 }
 
 .markdown-body pre {
   margin: 1.5rem 0;
   padding: 1.25rem;
   border-radius: 0.75rem;
-  background-color: #020617;
-  border: 1px solid #1e293b;
+  background-color: var(--code-bg);
+  border: 1px solid var(--line);
   overflow-x: auto;
   line-height: 1.6;
 }
@@ -158,131 +296,156 @@ body {
 .markdown-body pre code {
   font-family: var(--font-mono, monospace);
   font-size: 0.85rem;
-  color: #e2e8f0;
+  color: var(--ink-soft);
   background: transparent;
   padding: 0;
   border: 0;
 }
 
+.markdown-body .tblwrap {
+  margin: 1.25rem 0;
+  border: 1px solid var(--line);
+  border-radius: 0.5rem;
+  overflow-x: auto;
+  background: var(--surface);
+}
+
 .markdown-body table {
   width: 100%;
-  margin: 1.75rem 0;
   border-collapse: collapse;
-  font-size: 0.875rem;
+  font-size: 0.9rem;
+  line-height: 1.5;
 }
 
 .markdown-body th {
-  background-color: rgba(15, 23, 42, 0.9);
-  border: 1px solid #334155;
-  padding: 0.7rem 1rem;
+  background-color: var(--raised);
+  border-bottom: 1px solid var(--line);
+  padding: 0.55rem 0.85rem;
   text-align: left;
+  font-family: var(--font-mono, monospace);
+  font-size: 0.68rem;
   font-weight: 600;
-  color: #f8fafc;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--muted);
 }
 
 .markdown-body td {
-  border: 1px solid #1e293b;
-  padding: 0.6rem 1rem;
-  color: #cbd5e1;
+  border-top: 1px solid var(--line);
+  padding: 0.6rem 0.85rem;
+  vertical-align: top;
+  color: var(--ink-soft);
 }
 
-.markdown-body tr:nth-child(even) td {
-  background-color: rgba(15, 23, 42, 0.35);
+.markdown-body tbody tr:first-child td {
+  border-top: 0;
 }
 
 /* ========================================================================= */
 /* CALLOUT BOXES (GITHUB / OBSIDIAN COMPLIANT)                               */
 /* ========================================================================= */
 .callout-box {
-  margin: 1.5rem 0;
-  padding: 1.15rem 1.35rem;
-  border-radius: 0.875rem;
-  border-width: 1px;
-  border-style: solid;
-  line-height: 1.75;
+  position: relative;
+  margin: 1.75rem 0 1.25rem;
+  padding: 1rem 1.15rem 0.85rem;
+  border: 1px solid var(--line);
+  border-radius: 0.5rem;
+  background: var(--surface);
+  color: var(--ink-soft);
 }
 
+/* The title sits on the top border as a small tag. */
 .callout-box .callout-header {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  font-size: 0.8rem;
-  font-weight: 700;
+  position: absolute;
+  top: -0.65rem;
+  left: 0.75rem;
+  padding: 0.2rem 0.45rem;
+  border: 1px solid currentColor;
+  border-radius: 0.2rem;
+  background: var(--surface);
+  font-family: var(--font-mono, monospace);
+  font-size: 0.66rem;
+  font-weight: 600;
+  line-height: 1;
+  letter-spacing: 0.12em;
   text-transform: uppercase;
-  letter-spacing: 0.05em;
-  margin-bottom: 0.65rem;
+  color: var(--muted);
+}
+
+.callout-box .callout-icon {
+  display: none;
 }
 
 .callout-box .callout-content {
-  font-size: 0.9rem;
-  line-height: 1.75;
+  font-size: 0.95rem;
 }
 
-.callout-box .callout-content p {
-  margin-bottom: 0.75rem;
-}
-
+.callout-box .callout-content > :last-child,
 .callout-box .callout-content p:last-child {
   margin-bottom: 0;
 }
 
 /* Callout Color Themes */
+.callout-summary,
+.callout-abstract,
+.callout-tldr {
+  border: 1.5px solid var(--ink);
+}
+.callout-summary .callout-header,
+.callout-abstract .callout-header,
+.callout-tldr .callout-header {
+  color: var(--ink);
+}
+
 .callout-note,
 .callout-info {
-  border-color: rgba(56, 189, 248, 0.4);
-  background-color: rgba(8, 47, 73, 0.25);
-  color: #bae6fd;
-}
-.callout-note .callout-header,
-.callout-info .callout-header {
-  color: #38bdf8;
+  border-style: dotted;
+  border-color: var(--line-strong);
+  background-color: var(--raised);
 }
 
 .callout-tip {
-  border-color: rgba(52, 211, 153, 0.4);
-  background-color: rgba(6, 78, 59, 0.25);
-  color: #a7f3d0;
+  border: 1.5px dashed var(--accent);
+  background-color: var(--accent-soft);
 }
-.callout-tip .callout-header {
-  color: #34d399;
+.callout-tip .callout-header,
+.callout-important .callout-header,
+.callout-question .callout-header {
+  color: var(--accent-ink);
 }
 
 .callout-important {
-  border-color: rgba(129, 140, 248, 0.45);
-  background-color: rgba(49, 46, 129, 0.25);
-  color: #c7d2fe;
+  border-color: var(--accent);
 }
-.callout-important .callout-header {
-  color: #818cf8;
+
+.callout-question {
+  border-color: var(--accent-line);
+  background-color: var(--raised);
+}
+
+.callout-example {
+  background-color: var(--raised);
+}
+.callout-example .callout-header {
+  color: var(--ok);
 }
 
 .callout-warning {
-  border-color: rgba(251, 191, 36, 0.4);
-  background-color: rgba(120, 53, 15, 0.25);
-  color: #fde68a;
+  border-color: var(--warn-line);
+  background-color: var(--warn-soft);
 }
 .callout-warning .callout-header {
-  color: #fbbf24;
+  color: var(--warn);
 }
 
 .callout-caution,
 .callout-danger {
-  border-color: rgba(244, 63, 94, 0.4);
-  background-color: rgba(136, 19, 55, 0.25);
-  color: #fecdd3;
+  border-color: var(--danger-line);
+  background-color: var(--danger-soft);
 }
 .callout-caution .callout-header,
 .callout-danger .callout-header {
-  color: #f43f5e;
-}
-
-.callout-example {
-  border-color: rgba(168, 85, 247, 0.4);
-  background-color: rgba(88, 28, 135, 0.25);
-  color: #e9d5ff;
-}
-.callout-example .callout-header {
-  color: #a855f7;
+  color: var(--danger);
 }
 
 /* ========================================================================= */
@@ -292,8 +455,8 @@ body {
   margin: 1.75rem 0;
   padding: 1.25rem;
   border-radius: 0.75rem;
-  background-color: rgba(15, 23, 42, 0.5);
-  border: 1px solid rgba(99, 102, 241, 0.2);
+  background-color: var(--raised);
+  border: 1px solid var(--line);
   overflow-x: auto;
   text-align: center;
 }
@@ -304,7 +467,7 @@ body {
 
 .katex {
   font-size: 1.05em;
-  color: #f8fafc;
+  color: var(--ink);
 }
 
 .katex-display {

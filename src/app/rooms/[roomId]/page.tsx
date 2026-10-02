@@ -2,6 +2,7 @@
 
 import React, { useEffect, useState, use, useMemo, useRef } from 'react';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { renderMarkdown } from '@/lib/utils/markdownRenderer';
 import {
   ArrowLeft,
@@ -22,11 +23,9 @@ import {
   ChevronDown,
   Calendar,
   User,
-  ShieldCheck,
   AlertCircle,
   FileCode,
   Eye,
-  Globe,
   Pencil,
   Trash2,
   UserPlus,
@@ -39,6 +38,7 @@ import {
   ArrowRight,
 } from 'lucide-react';
 import { createClient } from '@/lib/supabase/client';
+import AppHeader from '@/components/AppHeader';
 import { detectWeekFromTitle } from '@/lib/utils/weekDetection';
 import type {
   StudyRoomRecord,
@@ -85,6 +85,8 @@ export default function RoomWorkspacePage({
   const [newMemberEmail, setNewMemberEmail] = useState('');
   const [addingMember, setAddingMember] = useState(false);
   const [removingMemberEmail, setRemovingMemberEmail] = useState<string | null>(null);
+  const [deletingRoom, setDeletingRoom] = useState(false);
+  const router = useRouter();
 
   // Selected Folder State
   const [selectedFolderId, setSelectedFolderId] = useState<string | null>(null);
@@ -1271,6 +1273,30 @@ export default function RoomWorkspacePage({
     }
   };
 
+  // Delete Room (Creator only)
+  const handleDeleteRoom = async () => {
+    const name = room?.name || '';
+    const confirmMsg =
+      outputLanguage === 'pt'
+        ? `Eliminar a sala "${name}"? Todas as pastas, aulas, Master Notes e logs desta sala são apagados para todos os membros. Esta ação não pode ser desfeita.`
+        : `Delete the room "${name}"? All folders, notes, Master Notes and logs of this room are removed for every member. This cannot be undone.`;
+    if (!window.confirm(confirmMsg)) return;
+
+    setDeletingRoom(true);
+    setError(null);
+    try {
+      const res = await fetch(`/api/rooms/${roomId}`, { method: 'DELETE' });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        throw new Error(data.error || (outputLanguage === 'pt' ? 'Falha ao eliminar sala.' : 'Failed to delete room.'));
+      }
+      router.push('/rooms');
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Erro ao eliminar sala.');
+      setDeletingRoom(false);
+    }
+  };
+
   // Add Member (Creator only)
   const handleAddMember = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -1362,7 +1388,7 @@ export default function RoomWorkspacePage({
     if (childFolders.length === 0) return null;
 
     return (
-      <div className={`space-y-0.5 border-l border-slate-800/80 ml-2 ${depth === 0 ? 'pl-2.5' : 'pl-2'}`}>
+      <div className={`space-y-0.5 border-l border-line ml-2 ${depth === 0 ? 'pl-2.5' : 'pl-2'}`}>
         {childFolders.map((sub) => {
           const isSelected = selectedFolderId === sub.id;
           const isExpanded = expandedFolders[sub.id] ?? true;
@@ -1389,9 +1415,9 @@ export default function RoomWorkspacePage({
                 className={`w-full flex items-center justify-between px-2 py-1 rounded-lg text-left transition-all ${
                   isSelected
                     ? isProj
-                      ? 'bg-emerald-950/40 border border-emerald-500/40 text-emerald-300 font-semibold shadow-sm'
-                      : 'bg-indigo-600/20 border border-indigo-500/40 text-indigo-300 font-semibold'
-                    : 'text-slate-400 hover:text-slate-200 hover:bg-slate-900/60'
+                      ? 'bg-ok-soft border border-ok-line text-ok font-semibold shadow-sm'
+                      : 'bg-accent-soft border border-accent-line text-accent-ink font-semibold'
+                    : 'text-muted hover:text-ink hover:bg-surface'
                 }`}
               >
                 <div
@@ -1410,12 +1436,12 @@ export default function RoomWorkspacePage({
                         e.stopPropagation();
                         toggleFolder(sub.id);
                       }}
-                      className="p-0.5 hover:text-white cursor-pointer"
+                      className="p-0.5 hover:text-ink cursor-pointer"
                     >
                       {isExpanded ? (
-                        <ChevronDown className="w-3 h-3 text-slate-400" />
+                        <ChevronDown className="w-3 h-3 text-muted" />
                       ) : (
-                        <ChevronRight className="w-3 h-3 text-slate-500" />
+                        <ChevronRight className="w-3 h-3 text-faint" />
                       )}
                     </button>
                   ) : (
@@ -1423,13 +1449,13 @@ export default function RoomWorkspacePage({
                   )}
 
                   {isProj ? (
-                    <Users className={`w-3.5 h-3.5 shrink-0 ${isSelected ? 'text-emerald-400' : 'text-emerald-500/80'}`} />
+                    <Users className={`w-3.5 h-3.5 shrink-0 ${isSelected ? 'text-ok' : 'text-ok'}`} />
                   ) : isWeek ? (
-                    <Calendar className={`w-3.5 h-3.5 shrink-0 ${isSelected ? 'text-indigo-400' : 'text-amber-400/80'}`} />
+                    <Calendar className={`w-3.5 h-3.5 shrink-0 ${isSelected ? 'text-accent-ink' : 'text-warn'}`} />
                   ) : isSec ? (
-                    <Layers className={`w-3.5 h-3.5 shrink-0 ${isSelected ? 'text-indigo-400' : 'text-indigo-500/80'}`} />
+                    <Layers className={`w-3.5 h-3.5 shrink-0 ${isSelected ? 'text-accent-ink' : 'text-accent-ink'}`} />
                   ) : (
-                    <Folder className="w-3.5 h-3.5 text-slate-500 shrink-0" />
+                    <Folder className="w-3.5 h-3.5 text-faint shrink-0" />
                   )}
 
                   <span className="truncate text-xs" title={sub.name}>{sub.name}</span>
@@ -1437,7 +1463,7 @@ export default function RoomWorkspacePage({
 
                 <div className="flex items-center space-x-1 shrink-0">
                   {noteCount > 0 && (
-                    <span className="px-1.5 py-0.2 rounded-full text-[9px] font-mono bg-slate-800 text-slate-400 font-bold">
+                    <span className="px-1.5 py-0.2 rounded-full text-xs bg-raised text-muted font-bold">
                       {noteCount}
                     </span>
                   )}
@@ -1452,7 +1478,7 @@ export default function RoomWorkspacePage({
                           handleOpenCreateSubfolder(sub);
                         }}
                         title={outputLanguage === 'pt' ? 'Criar subpasta' : 'Create subfolder'}
-                        className="p-1 text-slate-400 hover:text-emerald-400 rounded hover:bg-slate-800 transition-colors cursor-pointer"
+                        className="p-1 text-muted hover:text-ok rounded hover:bg-raised transition-colors cursor-pointer"
                       >
                         <Plus className="w-2.5 h-2.5" />
                       </button>
@@ -1467,7 +1493,7 @@ export default function RoomWorkspacePage({
                             handleStartRenameFolder(sub);
                           }}
                           title={outputLanguage === 'pt' ? 'Renomear pasta' : 'Rename folder'}
-                          className="p-1 text-slate-400 hover:text-white rounded hover:bg-slate-800 transition-colors cursor-pointer"
+                          className="p-1 text-muted hover:text-ink rounded hover:bg-raised transition-colors cursor-pointer"
                         >
                           <Pencil className="w-2.5 h-2.5" />
                         </button>
@@ -1478,7 +1504,7 @@ export default function RoomWorkspacePage({
                             handleDeleteFolder(sub);
                           }}
                           title={outputLanguage === 'pt' ? 'Eliminar pasta' : 'Delete folder'}
-                          className="p-1 text-slate-400 hover:text-rose-400 rounded hover:bg-slate-800 transition-colors cursor-pointer"
+                          className="p-1 text-muted hover:text-danger rounded hover:bg-raised transition-colors cursor-pointer"
                         >
                           <Trash2 className="w-2.5 h-2.5" />
                         </button>
@@ -1498,22 +1524,26 @@ export default function RoomWorkspacePage({
   };
 
   return (
-    <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col font-sans selection:bg-indigo-500/30">
-      {/* Top Navbar */}
-      <header className="border-b border-slate-800/80 bg-slate-950/90 backdrop-blur sticky top-0 z-40 px-6 py-3 flex flex-wrap items-center justify-between gap-4">
+    <div className="min-h-screen bg-canvas text-ink flex flex-col font-sans selection:bg-accent-soft">
+      <AppHeader
+        active="rooms"
+        language={outputLanguage}
+        onLanguageChange={handleSetLanguage}
+        email={currentUser?.email}
+      />
+
+      {/* Room bar: back link, room name, role */}
+      <div className="border-b border-line bg-surface px-4 sm:px-6 py-2.5 flex flex-wrap items-center justify-between gap-3">
         <div className="flex items-center space-x-4">
           <Link
             href="/rooms"
-            className="p-1.5 bg-slate-900 hover:bg-slate-800 border border-slate-800 rounded-lg text-slate-400 hover:text-white transition-colors"
+            className="p-1.5 bg-surface hover:bg-raised border border-line rounded-lg text-muted hover:text-ink transition-colors"
             title={outputLanguage === 'pt' ? 'Voltar às Salas' : 'Back to Rooms'}
           >
             <ArrowLeft className="w-4 h-4" />
           </Link>
 
           <div className="flex items-center space-x-2.5">
-            <div className="p-1.5 bg-linear-to-tr from-indigo-600 to-violet-500 rounded-lg shadow-md shadow-indigo-500/20">
-              <FolderTree className="w-4 h-4 text-white" />
-            </div>
             <div>
               {isEditingRoomName ? (
                 <div className="flex items-center space-x-1.5">
@@ -1527,13 +1557,13 @@ export default function RoomWorkspacePage({
                     }}
                     autoFocus
                     disabled={savingRoomName}
-                    className="bg-slate-900 border border-indigo-500 rounded px-2 py-0.5 text-xs text-white focus:outline-none focus:ring-1 focus:ring-indigo-400"
+                    className="bg-surface border border-accent rounded px-2 py-0.5 text-xs text-ink focus:outline-none focus:ring-1 focus:ring-accent"
                   />
                   <button
                     onClick={handleSaveRoomName}
                     disabled={savingRoomName}
                     title={outputLanguage === 'pt' ? 'Guardar' : 'Save'}
-                    className="p-1 bg-emerald-600 hover:bg-emerald-500 text-white rounded transition-colors cursor-pointer"
+                    className="p-1 bg-ok-solid hover:bg-ok-solid-hover text-on-accent rounded transition-colors cursor-pointer"
                   >
                     <Check className="w-3 h-3" />
                   </button>
@@ -1541,26 +1571,26 @@ export default function RoomWorkspacePage({
                     onClick={() => setIsEditingRoomName(false)}
                     disabled={savingRoomName}
                     title={outputLanguage === 'pt' ? 'Cancelar' : 'Cancel'}
-                    className="p-1 bg-slate-800 hover:bg-slate-700 text-slate-400 rounded transition-colors cursor-pointer"
+                    className="p-1 bg-raised hover:bg-raised-strong text-muted rounded transition-colors cursor-pointer"
                   >
                     <X className="w-3 h-3" />
                   </button>
                 </div>
               ) : (
                 <div className="flex items-center space-x-2">
-                  <span className="font-bold text-sm tracking-tight text-white">
+                  <span className="font-bold text-sm tracking-tight text-ink">
                     {room?.name || (outputLanguage === 'pt' ? 'Sala de Estudo' : 'Study Room')}
                   </span>
                   {isOwner && (
                     <button
                       onClick={handleStartEditRoomName}
                       title={outputLanguage === 'pt' ? 'Editar nome da sala' : 'Edit room name'}
-                      className="p-1 text-slate-400 hover:text-white rounded hover:bg-slate-800 transition-colors cursor-pointer"
+                      className="p-1 text-muted hover:text-ink rounded hover:bg-raised transition-colors cursor-pointer"
                     >
                       <Pencil className="w-3 h-3" />
                     </button>
                   )}
-                  <span className="px-1.5 py-0.2 text-[10px] uppercase font-mono font-semibold tracking-wider bg-indigo-950 border border-indigo-700 text-indigo-300 rounded">
+                  <span className="px-1.5 py-0.2 text-xs font-semibold bg-accent-soft border border-accent-line text-accent-ink rounded">
                     {isOwner
                       ? outputLanguage === 'pt'
                         ? 'Admin'
@@ -1571,7 +1601,7 @@ export default function RoomWorkspacePage({
                   </span>
                 </div>
               )}
-              <p className="text-[11px] text-slate-400 font-mono">
+              <p className="text-xs text-muted">
                 {activeFolder?.name
                   ? `${outputLanguage === 'pt' ? 'Ativo' : 'Active'}: ${activeFolder.name}`
                   : 'Multiplayer Workspace'}
@@ -1580,112 +1610,94 @@ export default function RoomWorkspacePage({
           </div>
         </div>
 
-        <div className="flex items-center space-x-3">
-          {/* Language Selector */}
-          <div className="flex items-center bg-slate-900 border border-slate-800 rounded-lg p-0.5 text-xs font-mono">
-            <Globe className="w-3.5 h-3.5 text-slate-400 ml-2 mr-1" />
+        {isOwner && (
+          <div className="flex items-center gap-2">
             <button
-              onClick={() => handleSetLanguage('pt')}
-              className={`px-2 py-0.5 rounded font-semibold transition-colors cursor-pointer ${
-                outputLanguage === 'pt' ? 'bg-indigo-600 text-white' : 'text-slate-400 hover:text-white'
-              }`}
+              onClick={() => setShowAddMemberModal(true)}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-line text-xs font-medium text-ink-soft hover:bg-raised transition-colors cursor-pointer"
             >
-              PT
+              <UserPlus className="w-3.5 h-3.5" />
+              <span>{outputLanguage === 'pt' ? 'Convidar' : 'Invite'}</span>
             </button>
             <button
-              onClick={() => handleSetLanguage('en')}
-              className={`px-2 py-0.5 rounded font-semibold transition-colors cursor-pointer ${
-                outputLanguage === 'en' ? 'bg-indigo-600 text-white' : 'text-slate-400 hover:text-white'
-              }`}
+              onClick={handleDeleteRoom}
+              disabled={deletingRoom}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-line text-xs font-medium text-danger hover:bg-danger-soft disabled:opacity-50 transition-colors cursor-pointer"
             >
-              EN
+              {deletingRoom ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : <Trash2 className="w-3.5 h-3.5" />}
+              <span>{outputLanguage === 'pt' ? 'Eliminar sala' : 'Delete room'}</span>
             </button>
           </div>
-
-          <Link
-            href="/"
-            className="flex items-center space-x-1 px-2.5 py-1 bg-slate-900 hover:bg-slate-800 border border-slate-800 text-slate-300 hover:text-white rounded-lg text-xs font-mono transition-colors"
-          >
-            <Sparkles className="w-3.5 h-3.5 text-indigo-400" />
-            <span>{outputLanguage === 'pt' ? 'Abrir Studio' : 'Open Studio'}</span>
-          </Link>
-
-          {currentUser?.email && (
-            <div className="flex items-center space-x-1.5 bg-slate-900 border border-slate-800 px-2.5 py-1 rounded-lg text-xs font-mono text-slate-300">
-              <ShieldCheck className="w-3.5 h-3.5 text-emerald-400" />
-              <span className="max-w-32.5 truncate">{currentUser.email}</span>
-            </div>
-          )}
-        </div>
-      </header>
+        )}
+      </div>
 
       {/* Main Workspace Grid: Resizable Tree (Left) | Workspace Content (Center) */}
       <div className="flex-1 flex overflow-hidden">
         {/* Left Column: Resizable Academic Hierarchy Tree */}
         <aside
           style={{ width: `${sidebarWidth}px` }}
-          className="relative bg-slate-950 border-r border-slate-800/80 flex flex-col p-4 space-y-4 overflow-y-auto shrink-0 select-text"
+          className="relative bg-canvas border-r border-line flex flex-col p-4 space-y-4 overflow-y-auto shrink-0 select-text"
         >
           {/* Drag Resizer Bar */}
           <div
             onMouseDown={() => setIsResizingSidebar(true)}
             title={outputLanguage === 'pt' ? 'Arrasta para redimensionar barra' : 'Drag to resize sidebar'}
-            className="absolute top-0 right-0 w-2 h-full cursor-col-resize hover:bg-indigo-500/40 active:bg-indigo-500 transition-colors z-20 flex items-center justify-center group select-none"
+            className="absolute top-0 right-0 w-2 h-full cursor-col-resize hover:bg-accent-soft active:bg-accent-hover transition-colors z-20 flex items-center justify-center group select-none"
           >
-            <div className="w-0.5 h-8 bg-slate-700 group-hover:bg-indigo-400 rounded-full transition-colors" />
+            <div className="w-0.5 h-8 bg-raised-strong group-hover:bg-accent-hover rounded-full transition-colors" />
           </div>
 
-          <div className="flex items-center justify-between text-xs font-mono font-semibold uppercase tracking-wider text-slate-400 pb-2 border-b border-slate-800">
+          <div className="flex items-center justify-between text-xs font-semibold text-muted pb-2 border-b border-line">
             <span className="flex items-center space-x-1.5">
-              <FolderTree className="w-3.5 h-3.5 text-indigo-400" />
+              <FolderTree className="w-3.5 h-3.5 text-accent-ink" />
               <span>{outputLanguage === 'pt' ? 'Pastas da Sala' : 'Room Folders'}</span>
             </span>
-            <span className="text-[10px] text-slate-500 font-normal">
+            <span className="text-xs text-faint font-normal">
               {outputLanguage === 'pt' ? '3º Ano' : 'Year 3'}
             </span>
           </div>
 
-          <div className="space-y-1 font-mono text-xs">
+          <div className="space-y-1 text-xs">
             {yearFolders.map((year) => (
               <div key={year.id} className="space-y-1">
                 <button
                   onClick={() => toggleFolder(year.id)}
-                  className="w-full flex items-center justify-between px-2 py-1.5 rounded-lg text-slate-300 hover:bg-slate-900 text-left font-bold transition-colors cursor-pointer"
+                  className="w-full flex items-center justify-between px-2 py-1.5 rounded-lg text-ink-soft hover:bg-surface text-left font-bold transition-colors cursor-pointer"
                 >
                   <span className="flex items-center space-x-1.5">
                     {(expandedFolders[year.id] ?? true) ? (
-                      <ChevronDown className="w-3.5 h-3.5 text-indigo-400" />
+                      <ChevronDown className="w-3.5 h-3.5 text-accent-ink" />
                     ) : (
-                      <ChevronRight className="w-3.5 h-3.5 text-slate-500" />
+                      <ChevronRight className="w-3.5 h-3.5 text-faint" />
                     )}
-                    <FolderOpen className="w-4 h-4 text-indigo-400" />
+                    <FolderOpen className="w-4 h-4 text-accent-ink" />
                     <span className="truncate">{year.name}</span>
                   </span>
                 </button>
 
                 {(expandedFolders[year.id] ?? true) && (
-                  <div className="pl-3 space-y-1 border-l border-slate-800/80 ml-2">
+                  <div className="pl-3 space-y-1 border-l border-line ml-2">
                     {semesterFolders
                       .filter((s) => s.parent_id === year.id)
                       .map((sem) => (
                         <div key={sem.id} className="space-y-1">
                           <button
                             onClick={() => toggleFolder(sem.id)}
-                            className="w-full flex items-center justify-between px-2 py-1 rounded text-slate-300 hover:bg-slate-900 text-left font-semibold transition-colors cursor-pointer"
+                            className="w-full flex items-center justify-between px-2 py-1 rounded text-ink-soft hover:bg-surface text-left font-semibold transition-colors cursor-pointer"
                           >
                             <span className="flex items-center space-x-1.5">
                               {(expandedFolders[sem.id] ?? true) ? (
-                                <ChevronDown className="w-3 h-3 text-indigo-400" />
+                                <ChevronDown className="w-3 h-3 text-accent-ink" />
                               ) : (
-                                <ChevronRight className="w-3 h-3 text-slate-500" />
+                                <ChevronRight className="w-3 h-3 text-faint" />
                               )}
-                              <Folder className="w-3.5 h-3.5 text-amber-400" />
+                              <Folder className="w-3.5 h-3.5 text-warn" />
                               <span className="truncate">{sem.name}</span>
                             </span>
                           </button>
 
                           {(expandedFolders[sem.id] ?? true) && (
-                            <div className="pl-2 space-y-0.5 border-l border-slate-800/80 ml-2">
+                            <div className="pl-2 space-y-0.5 border-l border-line ml-2">
                               {courseFolders
                                 .filter((c) => c.parent_id === sem.id)
                                 .map((course) => {
@@ -1704,8 +1716,8 @@ export default function RoomWorkspacePage({
                                       <div
                                         className={`w-full flex items-center justify-between px-2 py-1.5 rounded-lg text-left transition-all ${
                                           isSelected
-                                            ? 'bg-indigo-600/20 border border-indigo-500/40 text-indigo-300 font-semibold'
-                                            : 'text-slate-400 hover:text-slate-200 hover:bg-slate-900/60'
+                                            ? 'bg-accent-soft border border-accent-line text-accent-ink font-semibold'
+                                            : 'text-muted hover:text-ink hover:bg-surface'
                                         }`}
                                       >
                                         <div
@@ -1719,12 +1731,12 @@ export default function RoomWorkspacePage({
                                                 e.stopPropagation();
                                                 toggleFolder(course.id);
                                               }}
-                                              className="p-0.5 hover:text-white cursor-pointer"
+                                              className="p-0.5 hover:text-ink cursor-pointer"
                                             >
                                               {isCourseExpanded ? (
-                                                <ChevronDown className="w-3 h-3 text-slate-400" />
+                                                <ChevronDown className="w-3 h-3 text-muted" />
                                               ) : (
-                                                <ChevronRight className="w-3 h-3 text-slate-500" />
+                                                <ChevronRight className="w-3 h-3 text-faint" />
                                               )}
                                             </button>
                                           ) : (
@@ -1733,7 +1745,7 @@ export default function RoomWorkspacePage({
 
                                           <BookOpen
                                             className={`w-3.5 h-3.5 shrink-0 ${
-                                              isSelected ? 'text-indigo-400' : 'text-slate-500'
+                                              isSelected ? 'text-accent-ink' : 'text-faint'
                                             }`}
                                           />
                                           <span className="truncate font-semibold" title={course.name}>
@@ -1743,7 +1755,7 @@ export default function RoomWorkspacePage({
 
                                         <div className="flex items-center space-x-1 shrink-0">
                                           {noteCount > 0 && (
-                                            <span className="px-1.5 py-0.2 rounded-full text-[9px] font-mono bg-slate-800 text-slate-400 font-bold">
+                                            <span className="px-1.5 py-0.2 rounded-full text-xs bg-raised text-muted font-bold">
                                               {noteCount}
                                             </span>
                                           )}
@@ -1760,7 +1772,7 @@ export default function RoomWorkspacePage({
                                                 ? 'Criar subpasta (projeto/teórica)'
                                                 : 'Create subfolder'
                                             }
-                                            className="opacity-0 group-hover/course:opacity-100 p-1 text-slate-400 hover:text-emerald-400 rounded hover:bg-slate-800 transition-opacity cursor-pointer"
+                                            className="opacity-0 group-hover/course:opacity-100 p-1 text-muted hover:text-ok rounded hover:bg-raised transition-opacity cursor-pointer"
                                           >
                                             <Plus className="w-3 h-3" />
                                           </button>
@@ -1773,7 +1785,7 @@ export default function RoomWorkspacePage({
                                                 handleStartRenameFolder(course);
                                               }}
                                               title={outputLanguage === 'pt' ? 'Renomear cadeira' : 'Rename course'}
-                                              className="opacity-0 group-hover/course:opacity-100 p-1 text-slate-400 hover:text-white rounded hover:bg-slate-800 transition-opacity cursor-pointer"
+                                              className="opacity-0 group-hover/course:opacity-100 p-1 text-muted hover:text-ink rounded hover:bg-raised transition-opacity cursor-pointer"
                                             >
                                               <Pencil className="w-2.5 h-2.5" />
                                             </button>
@@ -1797,10 +1809,10 @@ export default function RoomWorkspacePage({
           </div>
 
           {/* Members widget at bottom of sidebar */}
-          <div className="mt-auto pt-4 border-t border-slate-800/80 space-y-2.5">
-            <div className="flex items-center justify-between text-xs font-mono text-slate-400">
-              <span className="flex items-center space-x-1.5 font-bold uppercase tracking-wider">
-                <Users className="w-3.5 h-3.5 text-emerald-400" />
+          <div className="mt-auto pt-4 border-t border-line space-y-2.5">
+            <div className="flex items-center justify-between text-xs text-muted">
+              <span className="flex items-center space-x-1.5 font-bold">
+                <Users className="w-3.5 h-3.5 text-ok" />
                 <span>
                   {outputLanguage === 'pt' ? 'Alunos' : 'Members'} ({members.length})
                 </span>
@@ -1809,7 +1821,7 @@ export default function RoomWorkspacePage({
                 <button
                   onClick={() => setShowAddMemberModal(true)}
                   title={outputLanguage === 'pt' ? 'Adicionar colega à sala' : 'Add member to room'}
-                  className="flex items-center space-x-1 px-2 py-0.5 bg-indigo-600/30 hover:bg-indigo-600/60 border border-indigo-500/40 text-indigo-300 hover:text-white rounded text-[10px] font-bold transition-colors cursor-pointer"
+                  className="flex items-center space-x-1 px-2 py-0.5 bg-accent-soft hover:bg-accent/60 border border-accent-line text-accent-ink hover:text-ink rounded text-xs font-bold transition-colors cursor-pointer"
                 >
                   <UserPlus className="w-3 h-3" />
                   <span>{outputLanguage === 'pt' ? '+ Convidar' : '+ Invite'}</span>
@@ -1817,7 +1829,7 @@ export default function RoomWorkspacePage({
               )}
             </div>
 
-            <div className="space-y-1.5 font-mono text-[11px] max-h-48 overflow-y-auto pr-1">
+            <div className="space-y-1.5 text-xs max-h-48 overflow-y-auto pr-1">
               {members.map((m) => {
                 const isMemberOwner =
                   m.role === 'owner' ||
@@ -1827,13 +1839,13 @@ export default function RoomWorkspacePage({
                 return (
                   <div
                     key={m.id}
-                    className="flex items-center justify-between text-slate-400 bg-slate-900/50 hover:bg-slate-900 px-2 py-1.5 rounded transition-colors gap-1.5"
+                    className="flex items-center justify-between text-muted bg-surface hover:bg-surface px-2 py-1.5 rounded transition-colors gap-1.5"
                   >
                     <span className="truncate max-w-37.5" title={m.user_email}>
                       {m.user_email}
                     </span>
                     <div className="flex items-center space-x-1 shrink-0">
-                      <span className="text-[9px] uppercase font-bold text-slate-500">
+                      <span className="text-xs font-bold text-faint">
                         {isMemberOwner
                           ? outputLanguage === 'pt'
                             ? 'Admin'
@@ -1847,7 +1859,7 @@ export default function RoomWorkspacePage({
                           onClick={() => handleRemoveMember(m.user_email)}
                           disabled={isRemoving}
                           title={outputLanguage === 'pt' ? 'Remover da sala' : 'Remove from room'}
-                          className="p-1 text-slate-500 hover:text-rose-400 hover:bg-rose-950/60 rounded transition-colors cursor-pointer"
+                          className="p-1 text-faint hover:text-danger hover:bg-danger-soft rounded transition-colors cursor-pointer"
                         >
                           {isRemoving ? (
                             <RefreshCw className="w-3 h-3 animate-spin" />
@@ -1865,16 +1877,16 @@ export default function RoomWorkspacePage({
         </aside>
 
         {/* Center Column: Knowledge Base / Project Workspace */}
-        <main className="flex-1 flex flex-col bg-slate-950 overflow-hidden">
+        <main className="flex-1 flex flex-col bg-canvas overflow-hidden">
           {error ? (
             <div className="p-8 text-center space-y-3">
-              <div className="inline-flex p-3 bg-rose-950/60 border border-rose-800/40 rounded-2xl text-rose-400">
+              <div className="inline-flex p-3 bg-danger-soft border border-danger-line rounded-xl text-danger">
                 <AlertCircle className="w-8 h-8" />
               </div>
-              <p className="text-xs text-rose-300">{error}</p>
+              <p className="text-xs text-danger">{error}</p>
             </div>
           ) : !activeFolder ? (
-            <div className="flex-1 flex items-center justify-center p-8 text-slate-500 font-mono text-xs">
+            <div className="flex-1 flex items-center justify-center p-8 text-faint text-xs">
               {outputLanguage === 'pt'
                 ? 'Seleciona uma cadeira ou pasta de projeto na barra lateral para começar.'
                 : 'Select a course or project folder in the hierarchy to begin.'}
@@ -1885,15 +1897,15 @@ export default function RoomWorkspacePage({
             /* ========================================================================= */
             <div className="flex-1 flex flex-col overflow-hidden">
               {/* Project Header */}
-              <div className="border-b border-slate-800 px-6 py-4 bg-slate-900/40 flex flex-wrap items-center justify-between gap-3">
+              <div className="border-b border-line px-6 py-4 bg-surface flex flex-wrap items-center justify-between gap-3">
                 <div className="space-y-1">
                   <div className="flex items-center space-x-2">
-                    <span className="px-2 py-0.5 bg-emerald-950 border border-emerald-700 text-emerald-300 text-xs font-mono font-bold rounded">
+                    <span className="px-2 py-0.5 bg-ok-soft border border-ok-line text-ok text-xs font-bold rounded">
                       PROJETO
                     </span>
-                    <h2 className="text-base font-bold text-white tracking-tight">{activeFolder.name}</h2>
+                    <h2 className="text-base font-bold text-ink tracking-tight">{activeFolder.name}</h2>
                   </div>
-                  <p className="text-xs text-slate-400 font-mono">
+                  <p className="text-xs text-muted">
                     {outputLanguage === 'pt'
                       ? 'Espaço de Grupo • Log Colaborativo, Master Note e Checklist de Guião'
                       : 'Group Space • Collaborative Log, Master Note & Guidelines Checklist'}
@@ -1902,13 +1914,13 @@ export default function RoomWorkspacePage({
 
                 <div className="flex items-center space-x-3">
                   {/* Quad Tab Switcher for Project */}
-                  <div className="bg-slate-900 border border-slate-800 rounded-lg p-1 flex items-center space-x-1 text-xs font-mono">
+                  <div className="bg-surface border border-line rounded-lg p-1 flex items-center space-x-1 text-xs">
                     <button
                       onClick={() => setActiveProjectTab('log')}
                       className={`px-2.5 py-1 rounded-md font-semibold transition-all cursor-pointer flex items-center space-x-1.5 ${
                         activeProjectTab === 'log'
-                          ? 'bg-emerald-600 text-white shadow-sm shadow-emerald-600/20'
-                          : 'text-slate-400 hover:text-white'
+                          ? 'bg-ok-solid text-on-accent shadow-sm'
+                          : 'text-muted hover:text-ink'
                       }`}
                     >
                       <MessageSquare className="w-3.5 h-3.5" />
@@ -1919,8 +1931,8 @@ export default function RoomWorkspacePage({
                       onClick={() => setActiveProjectTab('master')}
                       className={`px-2.5 py-1 rounded-md font-semibold transition-all cursor-pointer flex items-center space-x-1.5 ${
                         activeProjectTab === 'master'
-                          ? 'bg-indigo-600 text-white shadow-sm shadow-indigo-600/20'
-                          : 'text-slate-400 hover:text-white'
+                          ? 'bg-accent text-on-accent shadow-sm'
+                          : 'text-muted hover:text-ink'
                       }`}
                     >
                       <Sparkles className="w-3.5 h-3.5" />
@@ -1931,8 +1943,8 @@ export default function RoomWorkspacePage({
                       onClick={() => setActiveProjectTab('analysis')}
                       className={`px-2.5 py-1 rounded-md font-semibold transition-all cursor-pointer flex items-center space-x-1.5 ${
                         activeProjectTab === 'analysis'
-                          ? 'bg-violet-600 text-white shadow-sm shadow-violet-600/20'
-                          : 'text-slate-400 hover:text-white'
+                          ? 'bg-accent text-on-accent shadow-sm'
+                          : 'text-muted hover:text-ink'
                       }`}
                     >
                       <CheckSquare className="w-3.5 h-3.5" />
@@ -1943,8 +1955,8 @@ export default function RoomWorkspacePage({
                       onClick={() => setActiveProjectTab('notes')}
                       className={`px-2.5 py-1 rounded-md font-semibold transition-all cursor-pointer flex items-center space-x-1.5 ${
                         activeProjectTab === 'notes'
-                          ? 'bg-slate-700 text-white shadow-sm'
-                          : 'text-slate-400 hover:text-white'
+                          ? 'bg-raised-strong text-ink shadow-sm'
+                          : 'text-muted hover:text-ink'
                       }`}
                     >
                       <FileText className="w-3.5 h-3.5" />
@@ -1955,10 +1967,10 @@ export default function RoomWorkspacePage({
                   {/* Create nested subfolder in project */}
                   <button
                     onClick={() => handleOpenCreateSubfolder(activeFolder)}
-                    className="flex items-center space-x-1.5 px-3 py-1.5 bg-slate-900 hover:bg-slate-800 border border-slate-700 text-slate-200 text-xs font-semibold rounded-lg transition-colors cursor-pointer font-mono"
+                    className="flex items-center space-x-1.5 px-3 py-1.5 bg-surface hover:bg-raised border border-line-strong text-ink text-xs font-semibold rounded-lg transition-colors cursor-pointer"
                     title={outputLanguage === 'pt' ? 'Criar subpasta dentro deste projeto' : 'Create subfolder'}
                   >
-                    <Plus className="w-3.5 h-3.5 text-emerald-400" />
+                    <Plus className="w-3.5 h-3.5 text-ok" />
                     <span>{outputLanguage === 'pt' ? '+ Subpasta' : '+ Subfolder'}</span>
                   </button>
                 </div>
@@ -1967,9 +1979,9 @@ export default function RoomWorkspacePage({
               {/* PROJECT TAB 1: LOG DE GRUPO (CHAT MD SEM IA) */}
               {activeProjectTab === 'log' && (
                 <div className="flex-1 flex flex-col overflow-hidden">
-                  <div className="px-6 py-2.5 bg-slate-900/60 border-b border-slate-800/60 flex items-center justify-between text-xs font-mono">
-                    <div className="flex items-center space-x-2 text-slate-400">
-                      <span className="w-2 h-2 rounded-full bg-emerald-400" />
+                  <div className="px-6 py-2.5 bg-surface border-b border-line flex items-center justify-between text-xs">
+                    <div className="flex items-center space-x-2 text-muted">
+                      <span className="w-2 h-2 rounded-full bg-ok-solid-hover" />
                       <span>
                         {outputLanguage === 'pt'
                           ? 'Registo colaborativo sincronizado • Sem IA'
@@ -1981,10 +1993,10 @@ export default function RoomWorkspacePage({
                       <button
                         onClick={handleCopyProjectLog}
                         disabled={!projectLog?.content_markdown}
-                        className="px-2.5 py-1 bg-slate-900 hover:bg-slate-800 border border-slate-700 disabled:opacity-40 text-slate-300 hover:text-white rounded text-xs transition-colors flex items-center space-x-1 cursor-pointer"
+                        className="px-2.5 py-1 bg-surface hover:bg-raised border border-line-strong disabled:opacity-40 text-ink-soft hover:text-ink rounded text-xs transition-colors flex items-center space-x-1 cursor-pointer"
                       >
                         {copiedProjectLog ? (
-                          <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />
+                          <CheckCircle2 className="w-3.5 h-3.5 text-ok" />
                         ) : (
                           <Copy className="w-3.5 h-3.5" />
                         )}
@@ -1994,7 +2006,7 @@ export default function RoomWorkspacePage({
                       <button
                         onClick={handleDownloadProjectLog}
                         disabled={!projectLog?.content_markdown}
-                        className="px-2.5 py-1 bg-slate-900 hover:bg-slate-800 border border-slate-700 disabled:opacity-40 text-slate-300 hover:text-white rounded text-xs transition-colors flex items-center space-x-1 cursor-pointer"
+                        className="px-2.5 py-1 bg-surface hover:bg-raised border border-line-strong disabled:opacity-40 text-ink-soft hover:text-ink rounded text-xs transition-colors flex items-center space-x-1 cursor-pointer"
                       >
                         <Download className="w-3.5 h-3.5" />
                         <span>Download .md</span>
@@ -2005,7 +2017,7 @@ export default function RoomWorkspacePage({
                           setFullLogDraft(projectLog?.content_markdown || '');
                           setIsEditingFullLog(!isEditingFullLog);
                         }}
-                        className="px-3 py-1 bg-emerald-600/30 hover:bg-emerald-600/50 border border-emerald-500/50 text-emerald-300 hover:text-white rounded text-xs font-semibold transition-colors flex items-center space-x-1.5 cursor-pointer"
+                        className="px-3 py-1 bg-ok-soft hover:bg-ok-solid border border-ok-line text-ok hover:text-ink rounded text-xs font-semibold transition-colors flex items-center space-x-1.5 cursor-pointer"
                       >
                         <Edit3 className="w-3.5 h-3.5" />
                         <span>{isEditingFullLog ? (outputLanguage === 'pt' ? 'Ver Log' : 'View Mode') : (outputLanguage === 'pt' ? 'Editar MD Completo' : 'Edit Full MD')}</span>
@@ -2013,29 +2025,29 @@ export default function RoomWorkspacePage({
                     </div>
                   </div>
 
-                  <div className="flex-1 overflow-y-auto p-6 font-mono text-xs">
+                  <div className="flex-1 overflow-y-auto p-6 text-xs">
                     {loadingProjectLog ? (
                       <div className="space-y-3 animate-pulse max-w-4xl mx-auto">
-                        <div className="h-6 bg-slate-800 rounded w-1/4" />
-                        <div className="h-4 bg-slate-800 rounded w-3/4" />
-                        <div className="h-32 bg-slate-800 rounded" />
+                        <div className="h-6 bg-raised rounded w-1/4" />
+                        <div className="h-4 bg-raised rounded w-3/4" />
+                        <div className="h-32 bg-raised rounded" />
                       </div>
                     ) : isEditingFullLog ? (
                       <div className="max-w-4xl mx-auto h-full flex flex-col space-y-3">
-                        <div className="flex items-center justify-between text-xs text-slate-400">
+                        <div className="flex items-center justify-between text-xs text-muted">
                           <span>{outputLanguage === 'pt' ? 'Edição direta do ficheiro de log .md:' : 'Direct editing of log .md:'}</span>
-                          <span className="text-[10px] text-slate-500 font-mono">{fullLogDraft.length} chars</span>
+                          <span className="text-xs text-faint">{fullLogDraft.length} chars</span>
                         </div>
                         <textarea
                           value={fullLogDraft}
                           onChange={(e) => setFullLogDraft(e.target.value)}
-                          className="flex-1 w-full bg-slate-900 border border-slate-800 rounded-xl p-4 text-xs font-mono text-slate-200 leading-relaxed focus:outline-none focus:border-emerald-500 resize-none min-h-87.5"
+                          className="flex-1 w-full bg-surface border border-line rounded-xl p-4 text-xs text-ink leading-relaxed focus:outline-none focus:border-ok-line resize-none min-h-87.5"
                         />
                         <div className="flex items-center justify-end space-x-2">
                           <button
                             type="button"
                             onClick={() => setIsEditingFullLog(false)}
-                            className="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-lg cursor-pointer"
+                            className="px-3 py-1.5 bg-raised hover:bg-raised-strong text-ink-soft rounded-lg cursor-pointer"
                           >
                             {outputLanguage === 'pt' ? 'Cancelar' : 'Cancel'}
                           </button>
@@ -2043,7 +2055,7 @@ export default function RoomWorkspacePage({
                             type="button"
                             onClick={handleSaveFullLog}
                             disabled={savingFullLog}
-                            className="px-4 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white font-semibold rounded-lg flex items-center space-x-1.5 cursor-pointer shadow-sm shadow-emerald-600/20"
+                            className="px-4 py-1.5 bg-ok-solid hover:bg-ok-solid-hover text-on-accent font-semibold rounded-lg flex items-center space-x-1.5 cursor-pointer shadow-sm"
                           >
                             {savingFullLog && <RefreshCw className="w-3.5 h-3.5 animate-spin" />}
                             <span>{savingFullLog ? (outputLanguage === 'pt' ? 'A guardar...' : 'Saving...') : (outputLanguage === 'pt' ? 'Guardar Alterações' : 'Save Changes')}</span>
@@ -2053,18 +2065,18 @@ export default function RoomWorkspacePage({
                     ) : (
                       <div className="max-w-4xl mx-auto space-y-4">
                         {projectLog?.content_markdown ? (
-                          <div className="bg-slate-900/50 border border-slate-800/80 rounded-xl p-6">
-                            <pre className="whitespace-pre-wrap font-mono text-slate-200 text-xs leading-relaxed">
+                          <div className="bg-surface border border-line rounded-xl p-6">
+                            <pre className="whitespace-pre-wrap text-ink text-xs leading-relaxed">
                               {projectLog.content_markdown}
                             </pre>
                           </div>
                         ) : (
-                          <div className="bg-slate-900/40 border border-dashed border-slate-800 rounded-xl p-8 text-center space-y-3">
-                            <MessageSquare className="w-8 h-8 text-emerald-400 mx-auto" />
-                            <h3 className="text-sm font-bold text-white">
+                          <div className="bg-surface border border-dashed border-line rounded-xl p-8 text-center space-y-3">
+                            <MessageSquare className="w-8 h-8 text-ok mx-auto" />
+                            <h3 className="text-sm font-bold text-ink">
                               {outputLanguage === 'pt' ? 'Log do Projeto Vazio' : 'Empty Project Log'}
                             </h3>
-                            <p className="text-xs text-slate-400 max-w-md mx-auto">
+                            <p className="text-xs text-muted max-w-md mx-auto">
                               {outputLanguage === 'pt'
                                 ? 'Escreve decisões técnicas, atas de reuniões ou notas de progresso no campo abaixo. Qualquer membro do grupo pode colaborar neste ficheiro .md.'
                                 : 'Post technical decisions, meeting notes, or progress logs below. All group members collaborate on this single .md file.'}
@@ -2078,7 +2090,7 @@ export default function RoomWorkspacePage({
                   {!isEditingFullLog && (
                     <form
                       onSubmit={handleSendChatMessage}
-                      className="border-t border-slate-800/80 bg-slate-900/60 p-4 px-6 flex items-center space-x-3"
+                      className="border-t border-line bg-surface p-4 px-6 flex items-center space-x-3"
                     >
                       <input
                         type="text"
@@ -2089,12 +2101,12 @@ export default function RoomWorkspacePage({
                         }
                         value={projectChatMessage}
                         onChange={(e) => setProjectChatMessage(e.target.value)}
-                        className="flex-1 bg-slate-950 border border-slate-800 rounded-xl px-4 py-2.5 text-xs text-slate-200 placeholder-slate-500 font-mono focus:outline-none focus:border-emerald-500"
+                        className="flex-1 bg-canvas border border-line rounded-xl px-4 py-2.5 text-xs text-ink placeholder:text-faint focus:outline-none focus:border-ok-line"
                       />
                       <button
                         type="submit"
                         disabled={sendingChatMessage || !projectChatMessage.trim()}
-                        className="px-4 py-2.5 bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 text-white text-xs font-semibold rounded-xl flex items-center space-x-1.5 transition-colors cursor-pointer shadow-sm shadow-emerald-600/20 font-mono"
+                        className="px-4 py-2.5 bg-ok-solid hover:bg-ok-solid-hover disabled:opacity-50 text-on-accent text-xs font-semibold rounded-xl flex items-center space-x-1.5 transition-colors cursor-pointer shadow-sm"
                       >
                         {sendingChatMessage ? (
                           <RefreshCw className="w-3.5 h-3.5 animate-spin" />
@@ -2111,12 +2123,12 @@ export default function RoomWorkspacePage({
               {/* PROJECT TAB 2: MASTER NOTE (IA) */}
               {activeProjectTab === 'master' && (
                 <div className="flex-1 flex flex-col overflow-hidden">
-                  <div className="px-6 py-2.5 bg-slate-900/60 border-b border-slate-800/60 flex items-center justify-between text-xs font-mono">
-                    <div className="flex items-center space-x-3 text-slate-400">
+                  <div className="px-6 py-2.5 bg-surface border-b border-line flex items-center justify-between text-xs">
+                    <div className="flex items-center space-x-3 text-muted">
                       {masterSummary || masterNoteDraft ? (
                         <>
                           {masterSummary && (
-                            <span className="px-1.5 py-0.2 bg-indigo-950 text-indigo-300 border border-indigo-700/60 rounded text-[10px] font-bold">
+                            <span className="px-1.5 py-0.2 bg-accent-soft text-accent-ink border border-accent-line rounded text-xs font-bold">
                               v{masterSummary.version}
                             </span>
                           )}
@@ -2132,27 +2144,27 @@ export default function RoomWorkspacePage({
                           <span>•</span>
                           {/* Live auto-save indicator */}
                           {autoSaveStatus === 'saving' ? (
-                            <span className="flex items-center space-x-1 text-amber-400 text-[10px]">
+                            <span className="flex items-center space-x-1 text-warn text-xs">
                               <RefreshCw className="w-3 h-3 animate-spin" />
                               <span>{outputLanguage === 'pt' ? 'A guardar...' : 'Saving...'}</span>
                             </span>
                           ) : autoSaveStatus === 'saved' ? (
-                            <span className="flex items-center space-x-1 text-emerald-400 text-[10px]">
+                            <span className="flex items-center space-x-1 text-ok text-xs">
                               <Check className="w-3 h-3" />
                               <span>{outputLanguage === 'pt' ? 'Guardado automaticamente' : 'Auto-saved'}</span>
                             </span>
                           ) : autoSaveStatus === 'unsaved' ? (
-                            <span className="flex items-center space-x-1 text-amber-300 text-[10px]">
-                              <span className="w-1.5 h-1.5 rounded-full bg-amber-400 animate-pulse" />
+                            <span className="flex items-center space-x-1 text-warn text-xs">
+                              <span className="w-1.5 h-1.5 rounded-full bg-warn-solid-hover animate-pulse" />
                               <span>{outputLanguage === 'pt' ? 'A escrever...' : 'Typing...'}</span>
                             </span>
                           ) : autoSaveStatus === 'error' ? (
-                            <span className="flex items-center space-x-1 text-rose-400 text-[10px]">
+                            <span className="flex items-center space-x-1 text-danger text-xs">
                               <AlertCircle className="w-3 h-3" />
                               <span>{outputLanguage === 'pt' ? 'Erro ao guardar' : 'Save error'}</span>
                             </span>
                           ) : (
-                            <span className="text-slate-500 text-[10px]">
+                            <span className="text-faint text-xs">
                               {outputLanguage === 'pt' ? 'Edição interativa ativa' : 'Interactive editor active'}
                             </span>
                           )}
@@ -2172,10 +2184,10 @@ export default function RoomWorkspacePage({
                           {/* 1. BOTÃO DE VISUALIZAÇÃO FORMATADA */}
                           <button
                             onClick={() => setViewFormattedMasterNote(!viewFormattedMasterNote)}
-                            className={`px-2.5 py-1 border rounded text-xs transition-colors flex items-center space-x-1.5 cursor-pointer font-mono ${
+                            className={`px-2.5 py-1 border rounded text-xs transition-colors flex items-center space-x-1.5 cursor-pointer ${
                               viewFormattedMasterNote
-                                ? 'bg-indigo-950/80 border-indigo-500 text-indigo-200'
-                                : 'bg-slate-900 hover:bg-slate-800 border-slate-700 text-slate-300 hover:text-white'
+                                ? 'bg-accent-soft border-accent text-accent-ink'
+                                : 'bg-surface hover:bg-raised border-line-strong text-ink-soft hover:text-ink'
                             }`}
                             title={
                               viewFormattedMasterNote
@@ -2188,9 +2200,9 @@ export default function RoomWorkspacePage({
                             }
                           >
                             {viewFormattedMasterNote ? (
-                              <Edit3 className="w-3.5 h-3.5 text-indigo-400" />
+                              <Edit3 className="w-3.5 h-3.5 text-accent-ink" />
                             ) : (
-                              <Eye className="w-3.5 h-3.5 text-indigo-400" />
+                              <Eye className="w-3.5 h-3.5 text-accent-ink" />
                             )}
                             <span>
                               {viewFormattedMasterNote
@@ -2206,16 +2218,16 @@ export default function RoomWorkspacePage({
                           {/* 2. BOTÃO DE COPIAR */}
                           <button
                             onClick={handleCopyMaster}
-                            className="px-2.5 py-1 bg-slate-900 hover:bg-slate-800 border border-slate-700 text-slate-300 hover:text-white rounded text-xs transition-colors flex items-center space-x-1.5 cursor-pointer font-mono"
+                            className="px-2.5 py-1 bg-surface hover:bg-raised border border-line-strong text-ink-soft hover:text-ink rounded text-xs transition-colors flex items-center space-x-1.5 cursor-pointer"
                           >
-                            {copiedMaster ? <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5" />}
+                            {copiedMaster ? <CheckCircle2 className="w-3.5 h-3.5 text-ok" /> : <Copy className="w-3.5 h-3.5" />}
                             <span>{copiedMaster ? (outputLanguage === 'pt' ? 'Copiado!' : 'Copied!') : (outputLanguage === 'pt' ? 'Copiar' : 'Copy')}</span>
                           </button>
 
                           {/* 3. DOWNLOAD */}
                           <button
                             onClick={handleDownloadMaster}
-                            className="px-2.5 py-1 bg-slate-900 hover:bg-slate-800 border border-slate-700 text-slate-300 hover:text-white rounded text-xs transition-colors flex items-center space-x-1.5 cursor-pointer font-mono"
+                            className="px-2.5 py-1 bg-surface hover:bg-raised border border-line-strong text-ink-soft hover:text-ink rounded text-xs transition-colors flex items-center space-x-1.5 cursor-pointer"
                           >
                             <Download className="w-3.5 h-3.5" />
                             <span>Download .md</span>
@@ -2226,12 +2238,12 @@ export default function RoomWorkspacePage({
                             onClick={handleDeleteMasterSummary}
                             disabled={deletingMasterNote}
                             title={outputLanguage === 'pt' ? 'Apagar Master Note' : 'Delete Master Note'}
-                            className="px-2.5 py-1 bg-slate-900 hover:bg-rose-950/60 border border-slate-700 hover:border-rose-700/60 text-slate-400 hover:text-rose-300 rounded text-xs transition-colors flex items-center space-x-1.5 cursor-pointer font-mono"
+                            className="px-2.5 py-1 bg-surface hover:bg-danger-soft border border-line-strong hover:border-danger-line text-muted hover:text-danger rounded text-xs transition-colors flex items-center space-x-1.5 cursor-pointer"
                           >
                             {deletingMasterNote ? (
                               <RefreshCw className="w-3.5 h-3.5 animate-spin" />
                             ) : (
-                              <Trash2 className="w-3.5 h-3.5 text-rose-400" />
+                              <Trash2 className="w-3.5 h-3.5 text-danger" />
                             )}
                             <span>{outputLanguage === 'pt' ? 'Apagar' : 'Delete'}</span>
                           </button>
@@ -2251,7 +2263,7 @@ export default function RoomWorkspacePage({
                             ? 'Regenerar síntese mestra com IA'
                             : 'Regenerate master synthesis with AI'
                         }
-                        className="px-3 py-1 bg-indigo-600 hover:bg-indigo-500 disabled:opacity-40 text-white text-xs font-semibold rounded transition-colors flex items-center space-x-1.5 cursor-pointer shadow-sm font-mono"
+                        className="px-3 py-1 bg-accent hover:bg-accent-hover disabled:opacity-40 text-on-accent text-xs font-semibold rounded transition-colors flex items-center space-x-1.5 cursor-pointer shadow-sm"
                       >
                         <RefreshCw className={`w-3.5 h-3.5 ${regeneratingSummary ? 'animate-spin' : ''}`} />
                         <span>
@@ -2270,9 +2282,9 @@ export default function RoomWorkspacePage({
                   <div className="flex-1 overflow-y-auto p-8 font-sans">
                     {loadingSummary ? (
                       <div className="space-y-4 animate-pulse max-w-4xl mx-auto">
-                        <div className="h-8 bg-slate-800 rounded w-1/3" />
-                        <div className="h-4 bg-slate-800 rounded w-2/3" />
-                        <div className="h-40 bg-slate-800 rounded" />
+                        <div className="h-8 bg-raised rounded w-1/3" />
+                        <div className="h-4 bg-raised rounded w-2/3" />
+                        <div className="h-40 bg-raised rounded" />
                       </div>
                     ) : masterSummary || masterNoteDraft ? (
                       viewFormattedMasterNote ? (
@@ -2296,21 +2308,21 @@ export default function RoomWorkspacePage({
                                 ? 'Clica aqui para escrever ou editar as tuas notas em Markdown...'
                                 : 'Click here to write or edit your notes in Markdown...'
                             }
-                            className="w-full flex-1 min-h-150 bg-transparent text-slate-200 font-sans text-sm leading-relaxed resize-none border-0 focus:outline-none focus:ring-0 p-0 placeholder-slate-600 selection:bg-indigo-600/30 whitespace-pre-wrap"
+                            className="w-full flex-1 min-h-150 bg-transparent text-ink font-sans text-sm leading-relaxed resize-none border-0 focus:outline-none focus:ring-0 p-0 placeholder:text-faint selection:bg-accent-soft whitespace-pre-wrap"
                             spellCheck={false}
                           />
                         </div>
                       )
                     ) : (
-                      <div className="max-w-md mx-auto my-12 bg-slate-900/60 border border-dashed border-slate-800 rounded-2xl p-8 text-center space-y-4">
-                        <div className="inline-flex p-3 bg-indigo-950/60 border border-indigo-800/40 rounded-2xl text-indigo-400">
+                      <div className="max-w-md mx-auto my-12 bg-surface border border-dashed border-line rounded-xl p-8 text-center space-y-4">
+                        <div className="inline-flex p-3 bg-accent-soft border border-accent-line rounded-xl text-accent-ink">
                           <Sparkles className="w-8 h-8" />
                         </div>
                         <div className="space-y-1">
-                          <h3 className="text-base font-bold text-white">
+                          <h3 className="text-base font-bold text-ink">
                             {outputLanguage === 'pt' ? 'Sem Master Note do Projeto' : 'No Project Master Note'}
                           </h3>
-                          <p className="text-xs text-slate-400 leading-relaxed">
+                          <p className="text-xs text-muted leading-relaxed">
                             {outputLanguage === 'pt'
                               ? 'Clica em "Adicionar Ficheiro" para importar notas técnicas ou começa a escrever diretamente a Master Note do teu grupo.'
                               : 'Click "Add File" to import notes or start writing your project group Master Note directly.'}
@@ -2319,16 +2331,16 @@ export default function RoomWorkspacePage({
                         <div className="flex items-center justify-center space-x-3 pt-2">
                           <button
                             onClick={handleOpenImportModal}
-                            className="inline-flex items-center space-x-1.5 px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-semibold rounded-xl transition-colors cursor-pointer shadow-md shadow-indigo-600/20 font-mono"
+                            className="inline-flex items-center space-x-1.5 px-4 py-2 bg-accent hover:bg-accent-hover text-on-accent text-xs font-semibold rounded-xl transition-colors cursor-pointer shadow-md"
                           >
                             <Plus className="w-4 h-4" />
                             <span>{outputLanguage === 'pt' ? 'Adicionar Ficheiro' : 'Add File'}</span>
                           </button>
                           <button
                             onClick={handleCreateBlankMasterNote}
-                            className="inline-flex items-center space-x-1.5 px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-semibold rounded-xl transition-colors cursor-pointer font-mono"
+                            className="inline-flex items-center space-x-1.5 px-4 py-2 bg-raised hover:bg-raised-strong text-ink text-xs font-semibold rounded-xl transition-colors cursor-pointer"
                           >
-                            <Edit3 className="w-4 h-4 text-indigo-400" />
+                            <Edit3 className="w-4 h-4 text-accent-ink" />
                             <span>{outputLanguage === 'pt' ? 'Escrever Diretamente' : 'Write Directly'}</span>
                           </button>
                         </div>
@@ -2341,9 +2353,9 @@ export default function RoomWorkspacePage({
               {/* PROJECT TAB 3: GUIÃO & CHECKLIST (IA) */}
               {activeProjectTab === 'analysis' && (
                 <div className="flex-1 flex flex-col overflow-hidden">
-                  <div className="px-6 py-2.5 bg-slate-900/60 border-b border-slate-800/60 flex items-center justify-between text-xs font-mono">
-                    <div className="flex items-center space-x-2 text-slate-400">
-                      <CheckSquare className="w-3.5 h-3.5 text-violet-400" />
+                  <div className="px-6 py-2.5 bg-surface border-b border-line flex items-center justify-between text-xs">
+                    <div className="flex items-center space-x-2 text-muted">
+                      <CheckSquare className="w-3.5 h-3.5 text-accent-ink" />
                       <span>
                         {projectGuidelines
                           ? outputLanguage === 'pt'
@@ -2360,15 +2372,15 @@ export default function RoomWorkspacePage({
                         <>
                           <button
                             onClick={handleCopyGuidelines}
-                            className="px-2.5 py-1 bg-slate-900 hover:bg-slate-800 border border-slate-700 text-slate-300 hover:text-white rounded text-xs transition-colors flex items-center space-x-1 cursor-pointer"
+                            className="px-2.5 py-1 bg-surface hover:bg-raised border border-line-strong text-ink-soft hover:text-ink rounded text-xs transition-colors flex items-center space-x-1 cursor-pointer"
                           >
-                            {copiedAnalysis ? <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5" />}
+                            {copiedAnalysis ? <CheckCircle2 className="w-3.5 h-3.5 text-ok" /> : <Copy className="w-3.5 h-3.5" />}
                             <span>{copiedAnalysis ? (outputLanguage === 'pt' ? 'Copiado!' : 'Copied!') : (outputLanguage === 'pt' ? 'Copiar' : 'Copy')}</span>
                           </button>
 
                           <button
                             onClick={handleDownloadGuidelines}
-                            className="px-2.5 py-1 bg-slate-900 hover:bg-slate-800 border border-slate-700 text-slate-300 hover:text-white rounded text-xs transition-colors flex items-center space-x-1 cursor-pointer"
+                            className="px-2.5 py-1 bg-surface hover:bg-raised border border-line-strong text-ink-soft hover:text-ink rounded text-xs transition-colors flex items-center space-x-1 cursor-pointer"
                           >
                             <Download className="w-3.5 h-3.5" />
                             <span>Download .md</span>
@@ -2378,7 +2390,7 @@ export default function RoomWorkspacePage({
 
                       <button
                         onClick={() => setShowAnalysisForm(!showAnalysisForm)}
-                        className="px-3 py-1 bg-violet-600 hover:bg-violet-500 text-white rounded text-xs font-semibold transition-colors flex items-center space-x-1.5 cursor-pointer shadow-sm shadow-violet-600/20"
+                        className="px-3 py-1 bg-accent hover:bg-accent-hover text-on-accent rounded text-xs font-semibold transition-colors flex items-center space-x-1.5 cursor-pointer shadow-sm"
                       >
                         <Sparkles className="w-3.5 h-3.5" />
                         <span>
@@ -2401,22 +2413,22 @@ export default function RoomWorkspacePage({
                   <div className="flex-1 overflow-y-auto p-6">
                     {loadingProjectLog ? (
                       <div className="space-y-4 animate-pulse max-w-4xl mx-auto">
-                        <div className="h-8 bg-slate-800 rounded w-1/3" />
-                        <div className="h-4 bg-slate-800 rounded w-2/3" />
-                        <div className="h-40 bg-slate-800 rounded" />
+                        <div className="h-8 bg-raised rounded w-1/3" />
+                        <div className="h-4 bg-raised rounded w-2/3" />
+                        <div className="h-40 bg-raised rounded" />
                       </div>
                     ) : showAnalysisForm || !projectGuidelines ? (
-                      <div className="max-w-3xl mx-auto bg-slate-900/60 border border-slate-800 rounded-2xl p-6 space-y-4">
+                      <div className="max-w-3xl mx-auto bg-surface border border-line rounded-xl p-6 space-y-4">
                         <div className="space-y-1">
-                          <h3 className="text-base font-bold text-white flex items-center space-x-2">
-                            <CheckSquare className="w-4 h-4 text-violet-400" />
+                          <h3 className="text-base font-bold text-ink flex items-center space-x-2">
+                            <CheckSquare className="w-4 h-4 text-accent-ink" />
                             <span>
                               {outputLanguage === 'pt'
                                 ? 'Análise Inteligente de Guião e Checklist de Entregas'
                                 : 'Guidelines Analysis & Deliverables Checklist'}
                             </span>
                           </h3>
-                          <p className="text-xs text-slate-400 leading-relaxed font-mono">
+                          <p className="text-xs text-muted leading-relaxed">
                             {outputLanguage === 'pt'
                               ? 'Cola o texto do guião/enunciado ou prompts de outras IAs. O Gemini extrairá objetivos, datas de entrega, erros comuns e gerará uma checklist com caixas de seleção (- [ ]).'
                               : 'Paste project specs or prompts from other AIs. Gemini will extract milestones, deadlines, pitfalls, and generate an actionable checklist (- [ ]).'}
@@ -2425,7 +2437,7 @@ export default function RoomWorkspacePage({
 
                         <form onSubmit={handleAnalyzeProjectGuidelines} className="space-y-4">
                           <div>
-                            <label className="block text-xs font-medium text-slate-300 mb-1.5 font-mono">
+                            <label className="block text-xs font-medium text-ink-soft mb-1.5">
                               {outputLanguage === 'pt'
                                 ? 'Texto do Guião / Requisitos / Prompt de IA *'
                                 : 'Guideline Text / Specifications / AI Prompt *'}
@@ -2440,12 +2452,12 @@ export default function RoomWorkspacePage({
                               }
                               value={projectGuidelinePrompt}
                               onChange={(e) => setProjectGuidelinePrompt(e.target.value)}
-                              className="w-full bg-slate-950 border border-slate-800 rounded-xl p-3.5 text-xs text-slate-200 placeholder-slate-500 font-mono focus:outline-none focus:border-violet-500 leading-relaxed"
+                              className="w-full bg-canvas border border-line rounded-xl p-3.5 text-xs text-ink placeholder:text-faint focus:outline-none focus:border-accent leading-relaxed"
                             />
                           </div>
 
                           <div className="flex items-center justify-between pt-2">
-                            <span className="text-[10px] text-slate-500 font-mono">
+                            <span className="text-xs text-faint">
                               {projectGuidelinePrompt.length} chars
                             </span>
                             <div className="flex items-center space-x-2">
@@ -2453,7 +2465,7 @@ export default function RoomWorkspacePage({
                                 <button
                                   type="button"
                                   onClick={() => setShowAnalysisForm(false)}
-                                  className="px-3 py-1.5 text-xs text-slate-400 hover:text-white transition-colors cursor-pointer"
+                                  className="px-3 py-1.5 text-xs text-muted hover:text-ink transition-colors cursor-pointer"
                                 >
                                   {outputLanguage === 'pt' ? 'Cancelar' : 'Cancel'}
                                 </button>
@@ -2461,7 +2473,7 @@ export default function RoomWorkspacePage({
                               <button
                                 type="submit"
                                 disabled={isAnalyzingGuidelines || !projectGuidelinePrompt.trim()}
-                                className="px-4 py-2 bg-violet-600 hover:bg-violet-500 disabled:opacity-50 text-white text-xs font-semibold rounded-xl flex items-center space-x-1.5 transition-colors cursor-pointer shadow-md shadow-violet-600/20 font-mono"
+                                className="px-4 py-2 bg-accent hover:bg-accent-hover disabled:opacity-50 text-on-accent text-xs font-semibold rounded-xl flex items-center space-x-1.5 transition-colors cursor-pointer shadow-md"
                               >
                                 {isAnalyzingGuidelines ? (
                                   <RefreshCw className="w-3.5 h-3.5 animate-spin" />
@@ -2495,12 +2507,12 @@ export default function RoomWorkspacePage({
               {activeProjectTab === 'notes' && (
                 <div className="flex-1 overflow-y-auto p-6 space-y-4">
                   <div className="flex items-center justify-between max-w-5xl mx-auto">
-                    <h3 className="text-xs font-mono font-bold text-slate-400 uppercase tracking-wider">
+                    <h3 className="text-xs font-bold text-muted">
                       {outputLanguage === 'pt' ? 'Ficheiros do Projeto' : 'Project Files'} ({activeFolderNotes.length})
                     </h3>
                     <button
                       onClick={handleOpenImportModal}
-                      className="flex items-center space-x-1.5 px-3 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-semibold rounded-lg transition-colors cursor-pointer shadow-sm shadow-emerald-600/20 font-mono"
+                      className="flex items-center space-x-1.5 px-3 py-1.5 bg-ok-solid hover:bg-ok-solid-hover text-on-accent text-xs font-semibold rounded-lg transition-colors cursor-pointer shadow-sm"
                     >
                       <Plus className="w-3.5 h-3.5" />
                       <span>{outputLanguage === 'pt' ? 'Adicionar Ficheiro / Nota' : 'Add File / Note'}</span>
@@ -2508,13 +2520,13 @@ export default function RoomWorkspacePage({
                   </div>
 
                   {activeFolderNotes.length === 0 ? (
-                    <div className="max-w-md mx-auto my-12 bg-slate-900/60 border border-dashed border-slate-800 rounded-2xl p-8 text-center space-y-4">
-                      <FileText className="w-8 h-8 text-slate-500 mx-auto" />
+                    <div className="max-w-md mx-auto my-12 bg-surface border border-dashed border-line rounded-xl p-8 text-center space-y-4">
+                      <FileText className="w-8 h-8 text-faint mx-auto" />
                       <div className="space-y-1">
-                        <h4 className="text-sm font-bold text-white">
+                        <h4 className="text-sm font-bold text-ink">
                           {outputLanguage === 'pt' ? 'Sem ficheiros neste projeto' : 'No files in this project'}
                         </h4>
-                        <p className="text-xs text-slate-400">
+                        <p className="text-xs text-muted">
                           {outputLanguage === 'pt'
                             ? 'Podes associar notas de reuniões ou colar markdown diretamente.'
                             : 'You can link meeting notes or paste raw markdown.'}
@@ -2522,7 +2534,7 @@ export default function RoomWorkspacePage({
                       </div>
                       <button
                         onClick={handleOpenImportModal}
-                        className="inline-flex items-center space-x-1.5 px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-semibold rounded-xl transition-colors cursor-pointer"
+                        className="inline-flex items-center space-x-1.5 px-4 py-2 bg-ok-solid hover:bg-ok-solid-hover text-on-accent text-xs font-semibold rounded-xl transition-colors cursor-pointer"
                       >
                         <Plus className="w-4 h-4" />
                         <span>{outputLanguage === 'pt' ? 'Adicionar Ficheiro' : 'Add File'}</span>
@@ -2533,11 +2545,11 @@ export default function RoomWorkspacePage({
                       {activeFolderNotes.map((note) => (
                         <div
                           key={note.id}
-                          className="bg-slate-900/80 border border-slate-800 hover:border-slate-700 rounded-xl p-5 space-y-3 transition-colors flex flex-col justify-between"
+                          className="bg-surface border border-line hover:border-line-strong rounded-xl p-5 space-y-3 transition-colors flex flex-col justify-between"
                         >
                           <div className="space-y-2">
-                            <div className="flex items-center justify-between text-[11px] font-mono text-slate-400">
-                              <span className="flex items-center space-x-1 text-emerald-300">
+                            <div className="flex items-center justify-between text-xs text-muted">
+                              <span className="flex items-center space-x-1 text-ok">
                                 <User className="w-3 h-3" />
                                 <span className="truncate max-w-45">{note.author_email}</span>
                               </span>
@@ -2547,19 +2559,19 @@ export default function RoomWorkspacePage({
                                 )}
                               </span>
                             </div>
-                            <h4 className="text-sm font-bold text-white leading-snug">{note.title}</h4>
-                            <p className="text-xs text-slate-400 line-clamp-3 leading-relaxed">
+                            <h4 className="text-sm font-bold text-ink leading-snug">{note.title}</h4>
+                            <p className="text-xs text-muted line-clamp-3 leading-relaxed">
                               {note.content_markdown.replace(/[#*`_\[\]]/g, '').slice(0, 200)}...
                             </p>
                           </div>
-                          <div className="pt-3 border-t border-slate-800 flex items-center justify-between text-xs font-mono">
-                            <span className="text-slate-500 text-[10px]">
+                          <div className="pt-3 border-t border-line flex items-center justify-between text-xs">
+                            <span className="text-faint text-xs">
                               {note.content_markdown.length.toLocaleString()}{' '}
                               {outputLanguage === 'pt' ? 'caracteres' : 'chars'}
                             </span>
                             <button
                               onClick={() => setPreviewNote(note)}
-                              className="px-2.5 py-1 bg-slate-800 hover:bg-slate-700 text-slate-200 hover:text-white rounded text-xs transition-colors flex items-center space-x-1 cursor-pointer"
+                              className="px-2.5 py-1 bg-raised hover:bg-raised-strong text-ink hover:text-ink rounded text-xs transition-colors flex items-center space-x-1 cursor-pointer"
                             >
                               <Eye className="w-3.5 h-3.5" />
                               <span>{outputLanguage === 'pt' ? 'Ler Ficheiro' : 'Read File'}</span>
@@ -2578,60 +2590,60 @@ export default function RoomWorkspacePage({
             /* ========================================================================= */
             <div className="flex-1 flex flex-col overflow-hidden">
               {/* Header for Teóricas Root / Week Folder / Regular Course */}
-              <div className="border-b border-slate-800 px-6 py-4 bg-slate-900/40 flex flex-wrap items-center justify-between gap-3">
+              <div className="border-b border-line px-6 py-4 bg-surface flex flex-wrap items-center justify-between gap-3">
                 <div className="space-y-1.5">
                   {/* Breadcrumbs */}
                   {isWeekFolder ? (
-                    <div className="flex items-center space-x-1.5 text-xs font-mono text-slate-400">
+                    <div className="flex items-center space-x-1.5 text-xs text-muted">
                       {activeCourseAncestor && (
                         <>
                           <button
                             onClick={() => setSelectedFolderId(activeCourseAncestor.id)}
-                            className="hover:text-white transition-colors cursor-pointer"
+                            className="hover:text-ink transition-colors cursor-pointer"
                           >
                             {activeCourseAncestor.name}
                           </button>
-                          <ChevronRight className="w-3 h-3 text-slate-600" />
+                          <ChevronRight className="w-3 h-3 text-faint" />
                         </>
                       )}
                       {parentFolder && (
                         <>
                           <button
                             onClick={() => setSelectedFolderId(parentFolder.id)}
-                            className="hover:text-indigo-300 text-indigo-400 font-semibold transition-colors cursor-pointer flex items-center space-x-1"
+                            className="hover:text-accent-ink text-accent-ink font-semibold transition-colors cursor-pointer flex items-center space-x-1"
                           >
                             <span>Teóricas</span>
-                            <span className="text-[10px] text-slate-500 font-normal">
+                            <span className="text-xs text-faint font-normal">
                               ({outputLanguage === 'pt' ? 'Home Page' : 'Home'})
                             </span>
                           </button>
-                          <ChevronRight className="w-3 h-3 text-slate-600" />
+                          <ChevronRight className="w-3 h-3 text-faint" />
                         </>
                       )}
-                      <span className="text-white font-bold">{activeFolder.name}</span>
+                      <span className="text-ink font-bold">{activeFolder.name}</span>
                     </div>
                   ) : isTeoricasRoot && activeCourseAncestor ? (
-                    <div className="flex items-center space-x-1.5 text-xs font-mono text-slate-400">
+                    <div className="flex items-center space-x-1.5 text-xs text-muted">
                       <button
                         onClick={() => setSelectedFolderId(activeCourseAncestor.id)}
-                        className="hover:text-white transition-colors cursor-pointer"
+                        className="hover:text-ink transition-colors cursor-pointer"
                       >
                         {activeCourseAncestor.name}
                       </button>
-                      <ChevronRight className="w-3 h-3 text-slate-600" />
-                      <span className="text-indigo-400 font-semibold">Teóricas</span>
+                      <ChevronRight className="w-3 h-3 text-faint" />
+                      <span className="text-accent-ink font-semibold">Teóricas</span>
                     </div>
                   ) : null}
 
                   {/* Title & Badge */}
                   <div className="flex items-center space-x-2">
                     <span
-                      className={`px-2 py-0.5 border text-xs font-mono font-bold rounded ${
+                      className={`px-2 py-0.5 border text-xs font-bold rounded ${
                         isTeoricasRoot
-                          ? 'bg-indigo-950 border-indigo-700 text-indigo-300'
+                          ? 'bg-accent-soft border-accent-line text-accent-ink'
                           : isWeekFolder
-                          ? 'bg-amber-950/60 border-amber-700/60 text-amber-300'
-                          : 'bg-indigo-950 border-indigo-700 text-indigo-300'
+                          ? 'bg-warn-soft border-warn-line text-warn'
+                          : 'bg-accent-soft border-accent-line text-accent-ink'
                       }`}
                     >
                       {isTeoricasRoot
@@ -2644,7 +2656,7 @@ export default function RoomWorkspacePage({
                           : 'THEORY WEEK'
                         : activeFolder.course_code || activeFolder.folder_type.toUpperCase()}
                     </span>
-                    <h2 className="text-base font-bold text-white tracking-tight">
+                    <h2 className="text-base font-bold text-ink tracking-tight">
                       {isTeoricasRoot
                         ? activeCourseAncestor
                           ? `${activeCourseAncestor.name} — Home Page & Syllabus`
@@ -2658,7 +2670,7 @@ export default function RoomWorkspacePage({
                   </div>
 
                   {/* Subtitle */}
-                  <p className="text-xs text-slate-400 font-mono">
+                  <p className="text-xs text-muted">
                     {isTeoricasRoot
                       ? `${teoricasWeekSubfolders.length} ${
                           outputLanguage === 'pt' ? 'semana(s) no índice' : 'week(s) indexed'
@@ -2684,13 +2696,13 @@ export default function RoomWorkspacePage({
                 {/* Header Action Buttons & Tabs */}
                 <div className="flex items-center space-x-3">
                   {/* Tabs selector */}
-                  <div className="bg-slate-900 border border-slate-800 rounded-lg p-1 flex items-center space-x-1 text-xs font-mono">
+                  <div className="bg-surface border border-line rounded-lg p-1 flex items-center space-x-1 text-xs">
                     <button
                       onClick={() => setActiveCourseTab('master')}
                       className={`px-3 py-1 rounded-md font-semibold transition-all cursor-pointer flex items-center space-x-1.5 ${
                         activeCourseTab === 'master'
-                          ? 'bg-indigo-600 text-white shadow-sm shadow-indigo-600/20'
-                          : 'text-slate-400 hover:text-white'
+                          ? 'bg-accent text-on-accent shadow-sm'
+                          : 'text-muted hover:text-ink'
                       }`}
                     >
                       <Sparkles className="w-3.5 h-3.5" />
@@ -2712,8 +2724,8 @@ export default function RoomWorkspacePage({
                         onClick={() => setActiveCourseTab('weeks')}
                         className={`px-3 py-1 rounded-md font-semibold transition-all cursor-pointer flex items-center space-x-1.5 ${
                           activeCourseTab === 'weeks'
-                            ? 'bg-indigo-600 text-white shadow-sm shadow-indigo-600/20'
-                            : 'text-slate-400 hover:text-white'
+                            ? 'bg-accent text-on-accent shadow-sm'
+                            : 'text-muted hover:text-ink'
                         }`}
                       >
                         <Layers className="w-3.5 h-3.5" />
@@ -2728,8 +2740,8 @@ export default function RoomWorkspacePage({
                       onClick={() => setActiveCourseTab('notes')}
                       className={`px-3 py-1 rounded-md font-semibold transition-all cursor-pointer flex items-center space-x-1.5 ${
                         activeCourseTab === 'notes'
-                          ? 'bg-indigo-600 text-white shadow-sm shadow-indigo-600/20'
-                          : 'text-slate-400 hover:text-white'
+                          ? 'bg-accent text-on-accent shadow-sm'
+                          : 'text-muted hover:text-ink'
                       }`}
                     >
                       <FileText className="w-3.5 h-3.5" />
@@ -2750,14 +2762,14 @@ export default function RoomWorkspacePage({
                     <>
                       <button
                         onClick={() => setShowSyllabusModal(true)}
-                        className="flex items-center space-x-1.5 px-3 py-1.5 bg-indigo-600/20 hover:bg-indigo-600/30 border border-indigo-500/40 text-indigo-300 hover:text-white text-xs font-semibold rounded-lg transition-colors cursor-pointer font-mono"
+                        className="flex items-center space-x-1.5 px-3 py-1.5 bg-accent-soft hover:bg-accent-soft border border-accent-line text-accent-ink hover:text-ink text-xs font-semibold rounded-lg transition-colors cursor-pointer"
                         title={
                           outputLanguage === 'pt'
                             ? 'Configurar objetivos, datas de exames e regras da cadeira com IA'
                             : 'Configure course syllabus, exam dates, and rules with AI'
                         }
                       >
-                        <Sparkles className="w-3.5 h-3.5 text-indigo-400" />
+                        <Sparkles className="w-3.5 h-3.5 text-accent-ink" />
                         <span>
                           {outputLanguage === 'pt' ? 'Configurar Syllabus' : 'Setup Syllabus'}
                         </span>
@@ -2765,16 +2777,16 @@ export default function RoomWorkspacePage({
 
                       <button
                         onClick={() => handleQuickAddWeek()}
-                        className="flex items-center space-x-1.5 px-3 py-1.5 bg-slate-900 hover:bg-slate-800 border border-slate-700 text-slate-200 text-xs font-semibold rounded-lg transition-colors cursor-pointer font-mono"
+                        className="flex items-center space-x-1.5 px-3 py-1.5 bg-surface hover:bg-raised border border-line-strong text-ink text-xs font-semibold rounded-lg transition-colors cursor-pointer"
                         title={outputLanguage === 'pt' ? 'Adicionar nova semana' : 'Add new week'}
                       >
-                        <Plus className="w-3.5 h-3.5 text-indigo-400" />
+                        <Plus className="w-3.5 h-3.5 text-accent-ink" />
                         <span>{outputLanguage === 'pt' ? '+ Nova Semana' : '+ New Week'}</span>
                       </button>
 
                       <button
                         onClick={handleOpenImportModal}
-                        className="flex items-center space-x-1.5 px-3 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-semibold rounded-lg transition-colors cursor-pointer shadow-sm shadow-emerald-600/20 font-mono"
+                        className="flex items-center space-x-1.5 px-3 py-1.5 bg-ok-solid hover:bg-ok-solid-hover text-on-accent text-xs font-semibold rounded-lg transition-colors cursor-pointer shadow-sm"
                       >
                         <Plus className="w-3.5 h-3.5" />
                         <span>{outputLanguage === 'pt' ? 'Importar Aula' : 'Import Lecture'}</span>
@@ -2784,7 +2796,7 @@ export default function RoomWorkspacePage({
                     <>
                       <button
                         onClick={() => parentFolder && setSelectedFolderId(parentFolder.id)}
-                        className="flex items-center space-x-1.5 px-3 py-1.5 bg-slate-900 hover:bg-slate-800 border border-slate-700 text-slate-300 hover:text-white text-xs font-semibold rounded-lg transition-colors cursor-pointer font-mono"
+                        className="flex items-center space-x-1.5 px-3 py-1.5 bg-surface hover:bg-raised border border-line-strong text-ink-soft hover:text-ink text-xs font-semibold rounded-lg transition-colors cursor-pointer"
                       >
                         <ArrowLeft className="w-3.5 h-3.5" />
                         <span>{outputLanguage === 'pt' ? 'Home Page' : 'Home Page'}</span>
@@ -2792,7 +2804,7 @@ export default function RoomWorkspacePage({
 
                       <button
                         onClick={handleOpenImportModal}
-                        className="flex items-center space-x-1.5 px-3 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-semibold rounded-lg transition-colors cursor-pointer shadow-sm shadow-emerald-600/20 font-mono"
+                        className="flex items-center space-x-1.5 px-3 py-1.5 bg-ok-solid hover:bg-ok-solid-hover text-on-accent text-xs font-semibold rounded-lg transition-colors cursor-pointer shadow-sm"
                       >
                         <Plus className="w-3.5 h-3.5" />
                         <span>{outputLanguage === 'pt' ? 'Importar nesta Semana' : 'Import into Week'}</span>
@@ -2802,7 +2814,7 @@ export default function RoomWorkspacePage({
                     <>
                       <button
                         onClick={handleOpenImportModal}
-                        className="flex items-center space-x-1.5 px-3 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-semibold rounded-lg transition-colors cursor-pointer shadow-sm shadow-emerald-600/20 font-mono"
+                        className="flex items-center space-x-1.5 px-3 py-1.5 bg-ok-solid hover:bg-ok-solid-hover text-on-accent text-xs font-semibold rounded-lg transition-colors cursor-pointer shadow-sm"
                       >
                         <Plus className="w-3.5 h-3.5" />
                         <span>{outputLanguage === 'pt' ? 'Importar Aula' : 'Import Lecture'}</span>
@@ -2810,12 +2822,12 @@ export default function RoomWorkspacePage({
 
                       <button
                         onClick={() => handleOpenCreateSubfolder(activeFolder)}
-                        className="flex items-center space-x-1.5 px-3 py-1.5 bg-slate-900 hover:bg-slate-800 border border-slate-700 text-slate-200 text-xs font-semibold rounded-lg transition-colors cursor-pointer font-mono"
+                        className="flex items-center space-x-1.5 px-3 py-1.5 bg-surface hover:bg-raised border border-line-strong text-ink text-xs font-semibold rounded-lg transition-colors cursor-pointer"
                         title={
                           outputLanguage === 'pt' ? 'Criar subpasta nesta cadeira' : 'Create subfolder'
                         }
                       >
-                        <Plus className="w-3.5 h-3.5 text-indigo-400" />
+                        <Plus className="w-3.5 h-3.5 text-accent-ink" />
                         <span>{outputLanguage === 'pt' ? '+ Subpasta' : '+ Subfolder'}</span>
                       </button>
                     </>
@@ -2826,12 +2838,12 @@ export default function RoomWorkspacePage({
               {/* VIEW 1: MASTER NOTE / SYLLABUS TAB */}
               {activeCourseTab === 'master' && (
                 <div className="flex-1 flex flex-col overflow-hidden">
-                  <div className="px-6 py-2.5 bg-slate-900/60 border-b border-slate-800/60 flex items-center justify-between text-xs font-mono">
-                    <div className="flex items-center space-x-3 text-slate-400">
+                  <div className="px-6 py-2.5 bg-surface border-b border-line flex items-center justify-between text-xs">
+                    <div className="flex items-center space-x-3 text-muted">
                       {masterSummary || masterNoteDraft ? (
                         <>
                           {masterSummary && (
-                            <span className="px-1.5 py-0.2 bg-indigo-950 text-indigo-300 border border-indigo-700/60 rounded text-[10px] font-bold">
+                            <span className="px-1.5 py-0.2 bg-accent-soft text-accent-ink border border-accent-line rounded text-xs font-bold">
                               v{masterSummary.version}
                             </span>
                           )}
@@ -2847,7 +2859,7 @@ export default function RoomWorkspacePage({
                           <span>•</span>
                           {masterSummary && (
                             <>
-                              <span className="text-slate-500">
+                              <span className="text-faint">
                                 {outputLanguage === 'pt' ? 'Atualizado em ' : 'Updated at '}
                                 {new Date(masterSummary.last_updated_at).toLocaleTimeString(
                                   outputLanguage === 'pt' ? 'pt-PT' : 'en-US',
@@ -2859,27 +2871,27 @@ export default function RoomWorkspacePage({
                           )}
                           {/* Live auto-save indicator */}
                           {autoSaveStatus === 'saving' ? (
-                            <span className="flex items-center space-x-1 text-amber-400 text-[10px]">
+                            <span className="flex items-center space-x-1 text-warn text-xs">
                               <RefreshCw className="w-3 h-3 animate-spin" />
                               <span>{outputLanguage === 'pt' ? 'A guardar...' : 'Saving...'}</span>
                             </span>
                           ) : autoSaveStatus === 'saved' ? (
-                            <span className="flex items-center space-x-1 text-emerald-400 text-[10px]">
+                            <span className="flex items-center space-x-1 text-ok text-xs">
                               <Check className="w-3 h-3" />
                               <span>{outputLanguage === 'pt' ? 'Guardado automaticamente' : 'Auto-saved'}</span>
                             </span>
                           ) : autoSaveStatus === 'unsaved' ? (
-                            <span className="flex items-center space-x-1 text-amber-300 text-[10px]">
-                              <span className="w-1.5 h-1.5 rounded-full bg-amber-400 animate-pulse" />
+                            <span className="flex items-center space-x-1 text-warn text-xs">
+                              <span className="w-1.5 h-1.5 rounded-full bg-warn-solid-hover animate-pulse" />
                               <span>{outputLanguage === 'pt' ? 'A escrever...' : 'Typing...'}</span>
                             </span>
                           ) : autoSaveStatus === 'error' ? (
-                            <span className="flex items-center space-x-1 text-rose-400 text-[10px]">
+                            <span className="flex items-center space-x-1 text-danger text-xs">
                               <AlertCircle className="w-3 h-3" />
                               <span>{outputLanguage === 'pt' ? 'Erro ao guardar' : 'Save error'}</span>
                             </span>
                           ) : (
-                            <span className="text-slate-500 text-[10px]">
+                            <span className="text-faint text-xs">
                               {outputLanguage === 'pt' ? 'Edição interativa ativa' : 'Interactive editor active'}
                             </span>
                           )}
@@ -2907,10 +2919,10 @@ export default function RoomWorkspacePage({
                           {/* 1. BOTÃO DE VISUALIZAÇÃO FORMATADA */}
                           <button
                             onClick={() => setViewFormattedMasterNote(!viewFormattedMasterNote)}
-                            className={`px-2.5 py-1 border rounded text-xs transition-colors flex items-center space-x-1.5 cursor-pointer font-mono ${
+                            className={`px-2.5 py-1 border rounded text-xs transition-colors flex items-center space-x-1.5 cursor-pointer ${
                               viewFormattedMasterNote
-                                ? 'bg-indigo-950/80 border-indigo-500 text-indigo-200'
-                                : 'bg-slate-900 hover:bg-slate-800 border-slate-700 text-slate-300 hover:text-white'
+                                ? 'bg-accent-soft border-accent text-accent-ink'
+                                : 'bg-surface hover:bg-raised border-line-strong text-ink-soft hover:text-ink'
                             }`}
                             title={
                               viewFormattedMasterNote
@@ -2923,9 +2935,9 @@ export default function RoomWorkspacePage({
                             }
                           >
                             {viewFormattedMasterNote ? (
-                              <Edit3 className="w-3.5 h-3.5 text-indigo-400" />
+                              <Edit3 className="w-3.5 h-3.5 text-accent-ink" />
                             ) : (
-                              <Eye className="w-3.5 h-3.5 text-indigo-400" />
+                              <Eye className="w-3.5 h-3.5 text-accent-ink" />
                             )}
                             <span>
                               {viewFormattedMasterNote
@@ -2941,10 +2953,10 @@ export default function RoomWorkspacePage({
                           {/* 2. BOTÃO DE COPIAR */}
                           <button
                             onClick={handleCopyMaster}
-                            className="px-2.5 py-1 bg-slate-900 hover:bg-slate-800 border border-slate-700 text-slate-300 hover:text-white rounded text-xs transition-colors flex items-center space-x-1.5 cursor-pointer font-mono"
+                            className="px-2.5 py-1 bg-surface hover:bg-raised border border-line-strong text-ink-soft hover:text-ink rounded text-xs transition-colors flex items-center space-x-1.5 cursor-pointer"
                           >
                             {copiedMaster ? (
-                              <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />
+                              <CheckCircle2 className="w-3.5 h-3.5 text-ok" />
                             ) : (
                               <Copy className="w-3.5 h-3.5" />
                             )}
@@ -2962,7 +2974,7 @@ export default function RoomWorkspacePage({
                           {/* 3. DOWNLOAD */}
                           <button
                             onClick={handleDownloadMaster}
-                            className="px-2.5 py-1 bg-slate-900 hover:bg-slate-800 border border-slate-700 text-slate-300 hover:text-white rounded text-xs transition-colors flex items-center space-x-1.5 cursor-pointer font-mono"
+                            className="px-2.5 py-1 bg-surface hover:bg-raised border border-line-strong text-ink-soft hover:text-ink rounded text-xs transition-colors flex items-center space-x-1.5 cursor-pointer"
                           >
                             <Download className="w-3.5 h-3.5" />
                             <span>Download .md</span>
@@ -2973,12 +2985,12 @@ export default function RoomWorkspacePage({
                             onClick={handleDeleteMasterSummary}
                             disabled={deletingMasterNote}
                             title={outputLanguage === 'pt' ? 'Apagar Master Note' : 'Delete Master Note'}
-                            className="px-2.5 py-1 bg-slate-900 hover:bg-rose-950/60 border border-slate-700 hover:border-rose-700/60 text-slate-400 hover:text-rose-300 rounded text-xs transition-colors flex items-center space-x-1.5 cursor-pointer font-mono"
+                            className="px-2.5 py-1 bg-surface hover:bg-danger-soft border border-line-strong hover:border-danger-line text-muted hover:text-danger rounded text-xs transition-colors flex items-center space-x-1.5 cursor-pointer"
                           >
                             {deletingMasterNote ? (
                               <RefreshCw className="w-3.5 h-3.5 animate-spin" />
                             ) : (
-                              <Trash2 className="w-3.5 h-3.5 text-rose-400" />
+                              <Trash2 className="w-3.5 h-3.5 text-danger" />
                             )}
                             <span>{outputLanguage === 'pt' ? 'Apagar' : 'Delete'}</span>
                           </button>
@@ -2989,7 +3001,7 @@ export default function RoomWorkspacePage({
                       {isTeoricasRoot ? (
                         <button
                           onClick={() => setShowSyllabusModal(true)}
-                          className="px-3 py-1 bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-semibold rounded transition-colors flex items-center space-x-1.5 cursor-pointer shadow-sm font-mono"
+                          className="px-3 py-1 bg-accent hover:bg-accent-hover text-on-accent text-xs font-semibold rounded transition-colors flex items-center space-x-1.5 cursor-pointer shadow-sm"
                         >
                           <Sparkles className="w-3.5 h-3.5" />
                           <span>
@@ -3015,7 +3027,7 @@ export default function RoomWorkspacePage({
                               ? 'Regenerar síntese mestra com IA'
                               : 'Regenerate master synthesis with AI'
                           }
-                          className="px-3 py-1 bg-indigo-600 hover:bg-indigo-500 disabled:opacity-40 text-white text-xs font-semibold rounded transition-colors flex items-center space-x-1.5 cursor-pointer shadow-sm font-mono"
+                          className="px-3 py-1 bg-accent hover:bg-accent-hover disabled:opacity-40 text-on-accent text-xs font-semibold rounded transition-colors flex items-center space-x-1.5 cursor-pointer shadow-sm"
                         >
                           <RefreshCw
                             className={`w-3.5 h-3.5 ${regeneratingSummary ? 'animate-spin' : ''}`}
@@ -3037,9 +3049,9 @@ export default function RoomWorkspacePage({
                   <div className="flex-1 overflow-y-auto p-8 font-sans">
                     {loadingSummary ? (
                       <div className="space-y-4 animate-pulse max-w-4xl mx-auto">
-                        <div className="h-8 bg-slate-800 rounded w-1/3" />
-                        <div className="h-4 bg-slate-800 rounded w-2/3" />
-                        <div className="h-40 bg-slate-800 rounded" />
+                        <div className="h-8 bg-raised rounded w-1/3" />
+                        <div className="h-4 bg-raised rounded w-2/3" />
+                        <div className="h-40 bg-raised rounded" />
                       </div>
                     ) : masterSummary || masterNoteDraft ? (
                       viewFormattedMasterNote ? (
@@ -3063,23 +3075,23 @@ export default function RoomWorkspacePage({
                                 ? 'Clica aqui para escrever ou editar notas em Markdown...'
                                 : 'Click here to write or edit notes in Markdown...'
                             }
-                            className="w-full flex-1 min-h-150 bg-transparent text-slate-200 font-sans text-sm leading-relaxed resize-none border-0 focus:outline-none focus:ring-0 p-0 placeholder-slate-600 selection:bg-indigo-600/30 whitespace-pre-wrap"
+                            className="w-full flex-1 min-h-150 bg-transparent text-ink font-sans text-sm leading-relaxed resize-none border-0 focus:outline-none focus:ring-0 p-0 placeholder:text-faint selection:bg-accent-soft whitespace-pre-wrap"
                             spellCheck={false}
                           />
                         </div>
                       )
                     ) : isTeoricasRoot ? (
-                      <div className="max-w-lg mx-auto my-12 bg-slate-900/60 border border-dashed border-slate-800 rounded-2xl p-8 text-center space-y-4">
-                        <div className="inline-flex p-3 bg-indigo-950/60 border border-indigo-800/40 rounded-2xl text-indigo-400">
+                      <div className="max-w-lg mx-auto my-12 bg-surface border border-dashed border-line rounded-xl p-8 text-center space-y-4">
+                        <div className="inline-flex p-3 bg-accent-soft border border-accent-line rounded-xl text-accent-ink">
                           <Sparkles className="w-8 h-8" />
                         </div>
                         <div className="space-y-1">
-                          <h3 className="text-base font-bold text-white">
+                          <h3 className="text-base font-bold text-ink">
                             {outputLanguage === 'pt'
                               ? 'Home Page & Syllabus da Cadeira'
                               : 'Course Home Page & Syllabus'}
                           </h3>
-                          <p className="text-xs text-slate-400 leading-relaxed font-mono">
+                          <p className="text-xs text-muted leading-relaxed">
                             {outputLanguage === 'pt'
                               ? 'Configura o plano geral da cadeira com os objetivos da UC, calendário de frequências e exames, prazos de entrega e critérios de avaliação para toda a turma.'
                               : 'Set up the general course syllabus with competencies, exam calendars, project deadlines, and grading criteria for the entire cohort.'}
@@ -3088,7 +3100,7 @@ export default function RoomWorkspacePage({
                         <div className="flex items-center justify-center space-x-3 pt-2">
                           <button
                             onClick={() => setShowSyllabusModal(true)}
-                            className="inline-flex items-center space-x-1.5 px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-semibold rounded-xl transition-colors cursor-pointer shadow-md shadow-indigo-600/20 font-mono"
+                            className="inline-flex items-center space-x-1.5 px-4 py-2 bg-accent hover:bg-accent-hover text-on-accent text-xs font-semibold rounded-xl transition-colors cursor-pointer shadow-md"
                           >
                             <Sparkles className="w-4 h-4" />
                             <span>
@@ -3099,18 +3111,18 @@ export default function RoomWorkspacePage({
                           </button>
                           <button
                             onClick={handleCreateBlankMasterNote}
-                            className="inline-flex items-center space-x-1.5 px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-semibold rounded-xl transition-colors cursor-pointer font-mono"
+                            className="inline-flex items-center space-x-1.5 px-4 py-2 bg-raised hover:bg-raised-strong text-ink text-xs font-semibold rounded-xl transition-colors cursor-pointer"
                           >
-                            <Edit3 className="w-4 h-4 text-indigo-400" />
+                            <Edit3 className="w-4 h-4 text-accent-ink" />
                             <span>
                               {outputLanguage === 'pt' ? 'Escrever Diretamente' : 'Write Directly'}
                             </span>
                           </button>
                           <button
                             onClick={() => setActiveCourseTab('weeks')}
-                            className="inline-flex items-center space-x-1.5 px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-semibold rounded-xl transition-colors cursor-pointer font-mono"
+                            className="inline-flex items-center space-x-1.5 px-4 py-2 bg-raised hover:bg-raised-strong text-ink text-xs font-semibold rounded-xl transition-colors cursor-pointer"
                           >
-                            <Layers className="w-4 h-4 text-indigo-400" />
+                            <Layers className="w-4 h-4 text-accent-ink" />
                             <span>
                               {outputLanguage === 'pt' ? 'Ver Semanas' : 'View Weeks'}
                             </span>
@@ -3118,17 +3130,17 @@ export default function RoomWorkspacePage({
                         </div>
                       </div>
                     ) : (
-                      <div className="max-w-md mx-auto my-12 bg-slate-900/60 border border-dashed border-slate-800 rounded-2xl p-8 text-center space-y-4">
-                        <div className="inline-flex p-3 bg-indigo-950/60 border border-indigo-800/40 rounded-2xl text-indigo-400">
+                      <div className="max-w-md mx-auto my-12 bg-surface border border-dashed border-line rounded-xl p-8 text-center space-y-4">
+                        <div className="inline-flex p-3 bg-accent-soft border border-accent-line rounded-xl text-accent-ink">
                           <Sparkles className="w-8 h-8" />
                         </div>
                         <div className="space-y-1">
-                          <h3 className="text-base font-bold text-white">
+                          <h3 className="text-base font-bold text-ink">
                             {outputLanguage === 'pt'
                               ? `Sem Síntese Mestra para ${activeFolder.name}`
                               : `No Master Synthesis for ${activeFolder.name}`}
                           </h3>
-                          <p className="text-xs text-slate-400 leading-relaxed">
+                          <p className="text-xs text-muted leading-relaxed">
                             {outputLanguage === 'pt' ? (
                               <>
                                 Clica em <strong>Importar Aula</strong> para adicionar apontamentos do teu histórico ou clica abaixo para começar a escrever diretamente.
@@ -3143,7 +3155,7 @@ export default function RoomWorkspacePage({
                         <div className="flex items-center justify-center space-x-3 pt-2">
                           <button
                             onClick={handleOpenImportModal}
-                            className="inline-flex items-center space-x-1.5 px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-semibold rounded-xl transition-colors cursor-pointer shadow-md shadow-indigo-600/20"
+                            className="inline-flex items-center space-x-1.5 px-4 py-2 bg-accent hover:bg-accent-hover text-on-accent text-xs font-semibold rounded-xl transition-colors cursor-pointer shadow-md"
                           >
                             <Plus className="w-4 h-4" />
                             <span>
@@ -3152,9 +3164,9 @@ export default function RoomWorkspacePage({
                           </button>
                           <button
                             onClick={handleCreateBlankMasterNote}
-                            className="inline-flex items-center space-x-1.5 px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-semibold rounded-xl transition-colors cursor-pointer font-mono"
+                            className="inline-flex items-center space-x-1.5 px-4 py-2 bg-raised hover:bg-raised-strong text-ink text-xs font-semibold rounded-xl transition-colors cursor-pointer"
                           >
-                            <Edit3 className="w-4 h-4 text-indigo-400" />
+                            <Edit3 className="w-4 h-4 text-accent-ink" />
                             <span>
                               {outputLanguage === 'pt' ? 'Escrever Diretamente' : 'Write Directly'}
                             </span>
@@ -3169,9 +3181,9 @@ export default function RoomWorkspacePage({
               {/* VIEW 2: ÍNDICE DE SEMANAS (TEÓRICAS ONLY) */}
               {isTeoricasRoot && activeCourseTab === 'weeks' && (
                 <div className="flex-1 flex flex-col overflow-hidden">
-                  <div className="px-6 py-2.5 bg-slate-900/60 border-b border-slate-800/60 flex items-center justify-between text-xs font-mono">
-                    <div className="flex items-center space-x-2 text-slate-400">
-                      <Layers className="w-3.5 h-3.5 text-indigo-400" />
+                  <div className="px-6 py-2.5 bg-surface border-b border-line flex items-center justify-between text-xs">
+                    <div className="flex items-center space-x-2 text-muted">
+                      <Layers className="w-3.5 h-3.5 text-accent-ink" />
                       <span>
                         {outputLanguage === 'pt'
                           ? 'Índice de Semanas e Tópicos Lecionados'
@@ -3181,7 +3193,7 @@ export default function RoomWorkspacePage({
 
                     <button
                       onClick={() => handleQuickAddWeek()}
-                      className="px-3 py-1 bg-indigo-600 hover:bg-indigo-500 text-white rounded text-xs font-semibold transition-colors flex items-center space-x-1.5 cursor-pointer shadow-sm shadow-indigo-600/20 font-mono"
+                      className="px-3 py-1 bg-accent hover:bg-accent-hover text-on-accent rounded text-xs font-semibold transition-colors flex items-center space-x-1.5 cursor-pointer shadow-sm"
                     >
                       <Plus className="w-3.5 h-3.5" />
                       <span>{outputLanguage === 'pt' ? '+ Adicionar Semana' : '+ Add Week'}</span>
@@ -3190,17 +3202,17 @@ export default function RoomWorkspacePage({
 
                   <div className="flex-1 overflow-y-auto p-6">
                     {teoricasWeekSubfolders.length === 0 ? (
-                      <div className="max-w-md mx-auto my-12 bg-slate-900/60 border border-dashed border-slate-800 rounded-2xl p-8 text-center space-y-4">
-                        <div className="inline-flex p-3 bg-amber-950/60 border border-amber-800/40 rounded-2xl text-amber-400">
+                      <div className="max-w-md mx-auto my-12 bg-surface border border-dashed border-line rounded-xl p-8 text-center space-y-4">
+                        <div className="inline-flex p-3 bg-warn-soft border border-warn-line rounded-xl text-warn">
                           <Calendar className="w-8 h-8" />
                         </div>
                         <div className="space-y-1">
-                          <h4 className="text-sm font-bold text-white">
+                          <h4 className="text-sm font-bold text-ink">
                             {outputLanguage === 'pt'
                               ? 'Nenhuma semana criada ainda'
                               : 'No weeks created yet'}
                           </h4>
-                          <p className="text-xs text-slate-400 leading-relaxed font-mono">
+                          <p className="text-xs text-muted leading-relaxed">
                             {outputLanguage === 'pt'
                               ? 'Ao importar apontamentos com títulos como "Semana 1", "Semana 2" ou "Aula 1", as semanas serão criadas e associadas aqui automaticamente com a respetiva Master Note. Podes também criar a primeira semana agora.'
                               : 'When importing notes with titles like "Week 1", "Week 2", or "Lecture 1", weeks will be created and linked here automatically with their dedicated Master Note. You can also create the first week manually now.'}
@@ -3208,7 +3220,7 @@ export default function RoomWorkspacePage({
                         </div>
                         <button
                           onClick={() => handleQuickAddWeek('Semana 1')}
-                          className="inline-flex items-center space-x-1.5 px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-semibold rounded-xl transition-colors cursor-pointer font-mono shadow-md shadow-indigo-600/20"
+                          className="inline-flex items-center space-x-1.5 px-4 py-2 bg-accent hover:bg-accent-hover text-on-accent text-xs font-semibold rounded-xl transition-colors cursor-pointer shadow-md"
                         >
                           <Plus className="w-4 h-4" />
                           <span>{outputLanguage === 'pt' ? 'Criar Semana 1' : 'Create Week 1'}</span>
@@ -3222,28 +3234,28 @@ export default function RoomWorkspacePage({
                             return (
                               <div
                                 key={week.id}
-                                className="bg-slate-900/70 border border-slate-800 hover:border-indigo-500/50 rounded-2xl p-5 space-y-3.5 transition-all flex flex-col justify-between group"
+                                className="bg-surface border border-line hover:border-accent-line rounded-xl p-5 space-y-3.5 transition-all flex flex-col justify-between group"
                               >
                                 <div className="space-y-2.5">
                                   <div className="flex items-center justify-between">
                                     <div className="flex items-center space-x-2">
-                                      <div className="p-1.5 bg-amber-950/60 border border-amber-700/60 rounded-lg text-amber-400">
+                                      <div className="p-1.5 bg-warn-soft border border-warn-line rounded-lg text-warn">
                                         <Calendar className="w-4 h-4" />
                                       </div>
-                                      <h4 className="text-sm font-bold text-white group-hover:text-indigo-300 transition-colors">
+                                      <h4 className="text-sm font-bold text-ink group-hover:text-accent-ink transition-colors">
                                         {week.name}
                                       </h4>
                                     </div>
-                                    <span className="px-2 py-0.5 rounded-full text-[10px] font-mono bg-slate-800 text-slate-300 font-bold border border-slate-700">
+                                    <span className="px-2 py-0.5 rounded-full text-xs bg-raised text-ink-soft font-bold border border-line-strong">
                                       {weekNotes.length}{' '}
                                       {outputLanguage === 'pt' ? 'aula(s)' : 'lecture(s)'}
                                     </span>
                                   </div>
 
                                   {/* Preview of notes inside this week */}
-                                  <div className="space-y-1 font-mono text-xs">
+                                  <div className="space-y-1 text-xs">
                                     {weekNotes.length === 0 ? (
-                                      <p className="text-[11px] text-slate-500 italic">
+                                      <p className="text-xs text-faint italic">
                                         {outputLanguage === 'pt'
                                           ? 'Sem aulas importadas nesta semana'
                                           : 'No lectures imported in this week'}
@@ -3252,28 +3264,28 @@ export default function RoomWorkspacePage({
                                       weekNotes.slice(0, 2).map((n) => (
                                         <div
                                           key={n.id}
-                                          className="text-slate-300 text-[11px] truncate flex items-center space-x-1"
+                                          className="text-ink-soft text-xs truncate flex items-center space-x-1"
                                         >
-                                          <span className="text-indigo-400">•</span>
+                                          <span className="text-accent-ink">•</span>
                                           <span className="truncate">{n.title}</span>
                                         </div>
                                       ))
                                     )}
                                     {weekNotes.length > 2 && (
-                                      <p className="text-[10px] text-slate-500 font-mono">
+                                      <p className="text-xs text-faint">
                                         +{weekNotes.length - 2} {outputLanguage === 'pt' ? 'mais' : 'more'}
                                       </p>
                                     )}
                                   </div>
                                 </div>
 
-                                <div className="pt-2 border-t border-slate-800/80">
+                                <div className="pt-2 border-t border-line">
                                   <button
                                     onClick={() => {
                                       setSelectedFolderId(week.id);
                                       setViewFormattedMasterNote(true);
                                     }}
-                                    className="w-full flex items-center justify-center space-x-1.5 py-2 px-3 bg-indigo-600/20 hover:bg-indigo-600 border border-indigo-500/40 hover:border-indigo-400 text-indigo-300 hover:text-white rounded-xl text-xs font-semibold font-mono transition-all cursor-pointer shadow-sm"
+                                    className="w-full flex items-center justify-center space-x-1.5 py-2 px-3 bg-accent-soft hover:bg-accent border border-accent-line hover:border-accent text-accent-ink hover:text-on-accent rounded-xl text-xs font-semibold transition-all cursor-pointer shadow-sm"
                                   >
                                     <span>
                                       {outputLanguage === 'pt' ? 'Abrir Semana' : 'Open Week'}
@@ -3295,17 +3307,17 @@ export default function RoomWorkspacePage({
               {activeCourseTab === 'notes' && (
                 <div className="flex-1 overflow-y-auto p-6 space-y-4">
                   {(isTeoricasRoot ? allTeoricasNotes : activeFolderNotes).length === 0 ? (
-                    <div className="max-w-md mx-auto my-12 bg-slate-900/60 border border-dashed border-slate-800 rounded-2xl p-8 text-center space-y-4">
-                      <div className="inline-flex p-3 bg-slate-800 border border-slate-700 rounded-2xl text-slate-400">
+                    <div className="max-w-md mx-auto my-12 bg-surface border border-dashed border-line rounded-xl p-8 text-center space-y-4">
+                      <div className="inline-flex p-3 bg-raised border border-line-strong rounded-xl text-muted">
                         <FileText className="w-8 h-8" />
                       </div>
                       <div className="space-y-1">
-                        <h3 className="text-base font-bold text-white">
+                        <h3 className="text-base font-bold text-ink">
                           {outputLanguage === 'pt'
                             ? 'Nenhuma aula importada nesta pasta'
                             : 'No lectures imported in this folder'}
                         </h3>
-                        <p className="text-xs text-slate-400">
+                        <p className="text-xs text-muted">
                           {outputLanguage === 'pt'
                             ? 'Importa apontamentos gerados no SynapseVault ou cola resumos em Markdown para partilhar com os colegas.'
                             : 'Import notes generated in SynapseVault or paste Markdown summaries to share with classmates.'}
@@ -3313,7 +3325,7 @@ export default function RoomWorkspacePage({
                       </div>
                       <button
                         onClick={handleOpenImportModal}
-                        className="inline-flex items-center space-x-1.5 px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-semibold rounded-xl transition-colors cursor-pointer"
+                        className="inline-flex items-center space-x-1.5 px-4 py-2 bg-accent hover:bg-accent-hover text-on-accent text-xs font-semibold rounded-xl transition-colors cursor-pointer"
                       >
                         <Plus className="w-4 h-4" />
                         <span>
@@ -3328,16 +3340,16 @@ export default function RoomWorkspacePage({
                         return (
                           <div
                             key={note.id}
-                            className="bg-slate-900/80 border border-slate-800 hover:border-slate-700 rounded-xl p-5 space-y-3 transition-colors flex flex-col justify-between"
+                            className="bg-surface border border-line hover:border-line-strong rounded-xl p-5 space-y-3 transition-colors flex flex-col justify-between"
                           >
                             <div className="space-y-2">
-                              <div className="flex items-center justify-between text-[11px] font-mono text-slate-400">
-                                <span className="flex items-center space-x-1 text-indigo-300">
+                              <div className="flex items-center justify-between text-xs text-muted">
+                                <span className="flex items-center space-x-1 text-accent-ink">
                                   <User className="w-3 h-3" />
                                   <span className="truncate max-w-37.5">{note.author_email}</span>
                                 </span>
                                 {noteFolder && noteFolder.id !== activeFolder.id && (
-                                  <span className="px-1.5 py-0.5 rounded bg-amber-950/60 border border-amber-700/60 text-amber-300 text-[10px] font-bold">
+                                  <span className="px-1.5 py-0.5 rounded bg-warn-soft border border-warn-line text-warn text-xs font-bold">
                                     {noteFolder.name}
                                   </span>
                                 )}
@@ -3348,15 +3360,15 @@ export default function RoomWorkspacePage({
                                 </span>
                               </div>
 
-                              <h4 className="text-sm font-bold text-white leading-snug">{note.title}</h4>
+                              <h4 className="text-sm font-bold text-ink leading-snug">{note.title}</h4>
 
-                              <p className="text-xs text-slate-400 line-clamp-3 leading-relaxed">
+                              <p className="text-xs text-muted line-clamp-3 leading-relaxed">
                                 {note.content_markdown.replace(/[#*`_\[\]]/g, '').slice(0, 200)}...
                               </p>
                             </div>
 
-                            <div className="pt-3 border-t border-slate-800 flex items-center justify-between text-xs font-mono">
-                              <span className="text-slate-500 text-[10px]">
+                            <div className="pt-3 border-t border-line flex items-center justify-between text-xs">
+                              <span className="text-faint text-xs">
                                 {note.content_markdown.length.toLocaleString()}{' '}
                                 {outputLanguage === 'pt' ? 'caracteres' : 'chars'}
                               </span>
@@ -3364,7 +3376,7 @@ export default function RoomWorkspacePage({
                               <div className="flex items-center space-x-1.5">
                                 <button
                                   onClick={() => setPreviewNote(note)}
-                                  className="px-2.5 py-1 bg-slate-800 hover:bg-slate-700 text-slate-200 hover:text-white rounded text-xs transition-colors flex items-center space-x-1 cursor-pointer"
+                                  className="px-2.5 py-1 bg-raised hover:bg-raised-strong text-ink hover:text-ink rounded text-xs transition-colors flex items-center space-x-1 cursor-pointer"
                                 >
                                   <Eye className="w-3.5 h-3.5" />
                                   <span>{outputLanguage === 'pt' ? 'Ler Aula' : 'Read Lecture'}</span>
@@ -3380,12 +3392,12 @@ export default function RoomWorkspacePage({
                                     onClick={() => handleDeleteNote(note)}
                                     disabled={deletingNoteId === note.id}
                                     title={outputLanguage === 'pt' ? 'Apagar Aula' : 'Delete Lecture'}
-                                    className="p-1.5 bg-slate-800 hover:bg-rose-950/60 border border-transparent hover:border-rose-600/50 text-slate-400 hover:text-rose-400 rounded text-xs transition-colors flex items-center justify-center cursor-pointer"
+                                    className="p-1.5 bg-raised hover:bg-danger-soft border border-transparent hover:border-danger-line text-muted hover:text-danger rounded text-xs transition-colors flex items-center justify-center cursor-pointer"
                                   >
                                     {deletingNoteId === note.id ? (
                                       <RefreshCw className="w-3.5 h-3.5 animate-spin" />
                                     ) : (
-                                      <Trash2 className="w-3.5 h-3.5 text-rose-400" />
+                                      <Trash2 className="w-3.5 h-3.5 text-danger" />
                                     )}
                                   </button>
                                 )}
@@ -3408,11 +3420,11 @@ export default function RoomWorkspacePage({
       {/* ========================================================================= */}
       {showSyllabusModal && (
         <div className="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="max-w-2xl w-full bg-slate-900 border border-slate-800 rounded-2xl p-6 shadow-2xl space-y-4 max-h-[85vh] flex flex-col">
-            <div className="flex items-center justify-between border-b border-slate-800 pb-3">
+          <div className="max-w-2xl w-full bg-surface border border-line rounded-xl p-6 shadow-2xl space-y-4 max-h-[85vh] flex flex-col">
+            <div className="flex items-center justify-between border-b border-line pb-3">
               <div className="flex items-center space-x-2">
-                <Sparkles className="w-5 h-5 text-indigo-400" />
-                <h2 className="text-base font-bold text-white">
+                <Sparkles className="w-5 h-5 text-accent-ink" />
+                <h2 className="text-base font-bold text-ink">
                   {outputLanguage === 'pt'
                     ? `Configurar Syllabus de ${activeCourseAncestor?.name || activeFolder?.name}`
                     : `Setup Syllabus for ${activeCourseAncestor?.name || activeFolder?.name}`}
@@ -3420,7 +3432,7 @@ export default function RoomWorkspacePage({
               </div>
               <button
                 onClick={() => setShowSyllabusModal(false)}
-                className="text-slate-400 hover:text-white transition-colors cursor-pointer text-sm"
+                className="text-muted hover:text-ink transition-colors cursor-pointer text-sm"
               >
                 ✕
               </button>
@@ -3428,12 +3440,12 @@ export default function RoomWorkspacePage({
 
             <form onSubmit={handleGenerateSyllabus} className="space-y-4 flex-1 flex flex-col">
               <div className="space-y-1">
-                <p className="text-xs text-slate-300 leading-relaxed font-mono">
+                <p className="text-xs text-ink-soft leading-relaxed">
                   {outputLanguage === 'pt'
                     ? 'Cola o texto da Ficha de Unidade Curricular (FUC), os slides de apresentação da disciplina ou notas iniciais do professor.'
                     : 'Paste the course syllabus description, introductory slides text, or professor guidelines.'}
                 </p>
-                <p className="text-[11px] text-slate-400 font-mono">
+                <p className="text-xs text-muted">
                   {outputLanguage === 'pt'
                     ? 'O Gemini estruturará os objetivos da UC, metodologia, calendário de frequências/exames, prazos de entrega e critérios de avaliação.'
                     : 'Gemini will synthesize course goals, assessment calendar (exams/tests), project deadlines, and grading rules.'}
@@ -3441,7 +3453,7 @@ export default function RoomWorkspacePage({
               </div>
 
               <div className="flex-1 flex flex-col">
-                <label className="block text-xs font-medium text-slate-300 mb-1.5 font-mono">
+                <label className="block text-xs font-medium text-ink-soft mb-1.5">
                   {outputLanguage === 'pt'
                     ? 'Texto de Apresentação / FUC da Cadeira *'
                     : 'Course Presentation / Syllabus Text *'}
@@ -3456,26 +3468,26 @@ export default function RoomWorkspacePage({
                   }
                   value={syllabusSourceText}
                   onChange={(e) => setSyllabusSourceText(e.target.value)}
-                  className="w-full flex-1 bg-slate-950 border border-slate-700 rounded-xl p-3.5 text-xs text-slate-200 placeholder-slate-500 font-mono focus:outline-none focus:border-indigo-500 leading-relaxed"
+                  className="w-full flex-1 bg-canvas border border-line-strong rounded-xl p-3.5 text-xs text-ink placeholder:text-faint focus:outline-none focus:border-accent leading-relaxed"
                 />
               </div>
 
               <div className="flex items-center justify-between pt-2">
-                <span className="text-[10px] text-slate-500 font-mono">
+                <span className="text-xs text-faint">
                   {syllabusSourceText.length} chars
                 </span>
                 <div className="flex items-center space-x-2">
                   <button
                     type="button"
                     onClick={() => setShowSyllabusModal(false)}
-                    className="px-3 py-1.5 text-xs text-slate-400 hover:text-white transition-colors cursor-pointer"
+                    className="px-3 py-1.5 text-xs text-muted hover:text-ink transition-colors cursor-pointer"
                   >
                     {outputLanguage === 'pt' ? 'Cancelar' : 'Cancel'}
                   </button>
                   <button
                     type="submit"
                     disabled={isGeneratingSyllabus || !syllabusSourceText.trim()}
-                    className="px-4 py-2 bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 text-white text-xs font-semibold rounded-xl transition-colors cursor-pointer flex items-center space-x-1.5 shadow-md shadow-indigo-600/20 font-mono"
+                    className="px-4 py-2 bg-accent hover:bg-accent-hover disabled:opacity-50 text-on-accent text-xs font-semibold rounded-xl transition-colors cursor-pointer flex items-center space-x-1.5 shadow-md"
                   >
                     {isGeneratingSyllabus && <RefreshCw className="w-3.5 h-3.5 animate-spin" />}
                     <span>
@@ -3500,11 +3512,11 @@ export default function RoomWorkspacePage({
       {/* ========================================================================= */}
       {showImportModal && (
         <div className="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="max-w-2xl w-full bg-slate-900 border border-slate-800 rounded-2xl p-6 shadow-2xl space-y-4 max-h-[85vh] flex flex-col">
-            <div className="flex items-center justify-between border-b border-slate-800 pb-3">
+          <div className="max-w-2xl w-full bg-surface border border-line rounded-xl p-6 shadow-2xl space-y-4 max-h-[85vh] flex flex-col">
+            <div className="flex items-center justify-between border-b border-line pb-3">
               <div className="flex items-center space-x-2">
-                <BookOpen className="w-5 h-5 text-indigo-400" />
-                <h2 className="text-base font-bold text-white">
+                <BookOpen className="w-5 h-5 text-accent-ink" />
+                <h2 className="text-base font-bold text-ink">
                   {outputLanguage === 'pt'
                     ? `Adicionar a ${activeFolder?.name}`
                     : `Add to ${activeFolder?.name}`}
@@ -3512,20 +3524,20 @@ export default function RoomWorkspacePage({
               </div>
               <button
                 onClick={() => setShowImportModal(false)}
-                className="text-slate-400 hover:text-white transition-colors cursor-pointer text-sm"
+                className="text-muted hover:text-ink transition-colors cursor-pointer text-sm"
               >
                 ✕
               </button>
             </div>
 
-            <div className="flex items-center space-x-2 border-b border-slate-800 pb-2 text-xs font-mono">
+            <div className="flex items-center space-x-2 border-b border-line pb-2 text-xs">
               <button
                 type="button"
                 onClick={() => setImportModalTab('history')}
                 className={`px-3 py-1.5 rounded-lg font-semibold transition-colors cursor-pointer ${
                   importModalTab === 'history'
-                    ? 'bg-indigo-600 text-white'
-                    : 'text-slate-400 hover:text-white'
+                    ? 'bg-accent text-on-accent'
+                    : 'text-muted hover:text-ink'
                 }`}
               >
                 {outputLanguage === 'pt' ? 'Do Meu Histórico Pessoal' : 'From My History'}
@@ -3535,21 +3547,21 @@ export default function RoomWorkspacePage({
                 onClick={() => setImportModalTab('paste')}
                 className={`px-3 py-1.5 rounded-lg font-semibold transition-colors cursor-pointer flex items-center space-x-1.5 ${
                   importModalTab === 'paste'
-                    ? 'bg-indigo-600 text-white'
-                    : 'text-slate-400 hover:text-white'
+                    ? 'bg-accent text-on-accent'
+                    : 'text-muted hover:text-ink'
                 }`}
               >
-                <FileCode className="w-3.5 h-3.5 text-emerald-400" />
+                <FileCode className="w-3.5 h-3.5 text-ok" />
                 <span>{outputLanguage === 'pt' ? 'Colar Markdown Direto' : 'Paste Raw Markdown'}</span>
               </button>
             </div>
 
             {/* Smart Week Destination Selector if importing on Teóricas Root */}
             {isTeoricasRoot && (
-              <div className="bg-indigo-950/40 border border-indigo-500/30 rounded-xl p-3 space-y-2">
+              <div className="bg-accent-soft border border-accent-line rounded-xl p-3 space-y-2">
                 <div className="flex items-center justify-between">
-                  <label className="text-xs font-semibold text-indigo-300 flex items-center space-x-1.5 font-mono">
-                    <Calendar className="w-3.5 h-3.5 text-indigo-400" />
+                  <label className="text-xs font-semibold text-accent-ink flex items-center space-x-1.5">
+                    <Calendar className="w-3.5 h-3.5 text-accent-ink" />
                     <span>
                       {outputLanguage === 'pt'
                         ? 'Semana de Destino (Deteção Inteligente):'
@@ -3561,7 +3573,7 @@ export default function RoomWorkspacePage({
                       importModalTab === 'paste' ? directNoteTitle : ''
                     );
                     return detected ? (
-                      <span className="text-[10px] font-mono text-emerald-400 font-bold bg-emerald-950/60 px-2 py-0.5 rounded border border-emerald-700/50">
+                      <span className="text-xs text-ok font-bold bg-ok-soft px-2 py-0.5 rounded border border-ok-line">
                         {outputLanguage === 'pt' ? `Detetado: ${detected}` : `Detected: ${detected}`}
                       </span>
                     ) : null;
@@ -3572,10 +3584,10 @@ export default function RoomWorkspacePage({
                   <button
                     type="button"
                     onClick={() => setTargetWeekSelection('')}
-                    className={`px-2 py-1 rounded text-[11px] font-mono transition-colors cursor-pointer ${
+                    className={`px-2 py-1 rounded text-xs transition-colors cursor-pointer ${
                       !targetWeekSelection
-                        ? 'bg-indigo-600 text-white font-bold'
-                        : 'bg-slate-800 text-slate-400 hover:text-white'
+                        ? 'bg-accent text-on-accent font-bold'
+                        : 'bg-raised text-muted hover:text-ink'
                     }`}
                   >
                     {outputLanguage === 'pt' ? '⚡ Auto (Pelo Título)' : '⚡ Auto (From Title)'}
@@ -3586,10 +3598,10 @@ export default function RoomWorkspacePage({
                       key={w.id}
                       type="button"
                       onClick={() => setTargetWeekSelection(w.name)}
-                      className={`px-2 py-1 rounded text-[11px] font-mono transition-colors cursor-pointer ${
+                      className={`px-2 py-1 rounded text-xs transition-colors cursor-pointer ${
                         targetWeekSelection === w.name
-                          ? 'bg-indigo-600 text-white font-bold'
-                          : 'bg-slate-800 text-slate-400 hover:text-white'
+                          ? 'bg-accent text-on-accent font-bold'
+                          : 'bg-raised text-muted hover:text-ink'
                       }`}
                     >
                       {w.name}
@@ -3603,7 +3615,7 @@ export default function RoomWorkspacePage({
                     }
                     value={targetWeekSelection}
                     onChange={(e) => setTargetWeekSelection(e.target.value)}
-                    className="flex-1 min-w-32.5 bg-slate-950 border border-slate-700 rounded px-2 py-1 text-xs text-white placeholder-slate-500 font-mono focus:outline-none focus:border-indigo-500"
+                    className="flex-1 min-w-32.5 bg-canvas border border-line-strong rounded px-2 py-1 text-xs text-ink placeholder:text-faint focus:outline-none focus:border-accent"
                   />
                 </div>
               </div>
@@ -3611,7 +3623,7 @@ export default function RoomWorkspacePage({
 
             {importModalTab === 'history' && (
               <div className="flex-1 overflow-y-auto space-y-2 pr-1">
-                <p className="text-xs text-slate-400 leading-relaxed font-mono mb-2">
+                <p className="text-xs text-muted leading-relaxed mb-2">
                   {outputLanguage === 'pt'
                     ? 'Seleciona uma nota sintetizada no teu histórico pessoal para adicionar a esta pasta.'
                     : 'Select a synthesized note from your personal history to add to this folder.'}
@@ -3620,11 +3632,11 @@ export default function RoomWorkspacePage({
                 {loadingPersonalNotes ? (
                   <div className="space-y-2 animate-pulse">
                     {[1, 2, 3].map((i) => (
-                      <div key={i} className="h-16 bg-slate-950 rounded-xl" />
+                      <div key={i} className="h-16 bg-canvas rounded-xl" />
                     ))}
                   </div>
                 ) : personalNotes.length === 0 ? (
-                  <div className="text-center py-8 text-xs text-slate-500 font-mono">
+                  <div className="text-center py-8 text-xs text-faint">
                     {outputLanguage === 'pt'
                       ? 'Não tens nenhuma nota sintetizada no teu histórico. Podes usar a aba "Colar Markdown Direto" ou ir ao Studio.'
                       : 'You have no synthesized notes in your history. You can use "Paste Raw Markdown" or use the Studio.'}
@@ -3639,18 +3651,18 @@ export default function RoomWorkspacePage({
                         key={pNote.id}
                         className={`p-3 rounded-xl border flex items-center justify-between transition-colors ${
                           isMatchingCode
-                            ? 'bg-indigo-950/30 border-indigo-700/50'
-                            : 'bg-slate-950 border-slate-800'
+                            ? 'bg-accent-soft border-accent-line'
+                            : 'bg-canvas border-line'
                         }`}
                       >
                         <div className="space-y-1 max-w-105">
                           <div className="flex items-center space-x-2">
-                            <span className="px-1.5 py-0.2 bg-slate-800 text-slate-300 font-mono text-[10px] font-bold rounded">
+                            <span className="px-1.5 py-0.2 bg-raised text-ink-soft text-xs font-bold rounded">
                               {pNote.course_code}
                             </span>
-                            <h4 className="text-xs font-bold text-white truncate">{pNote.title}</h4>
+                            <h4 className="text-xs font-bold text-ink truncate">{pNote.title}</h4>
                           </div>
-                          <p className="text-[11px] text-slate-400 font-mono">
+                          <p className="text-xs text-muted">
                             {new Date(pNote.created_at).toLocaleDateString(
                               outputLanguage === 'pt' ? 'pt-PT' : 'en-US'
                             )}{' '}
@@ -3661,7 +3673,7 @@ export default function RoomWorkspacePage({
                         <button
                           onClick={() => handleImportPersonalNote(pNote)}
                           disabled={isImporting}
-                          className="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 text-white text-xs font-semibold rounded-lg transition-colors cursor-pointer flex items-center space-x-1 font-mono shadow-sm"
+                          className="px-3 py-1.5 bg-accent hover:bg-accent-hover disabled:opacity-50 text-on-accent text-xs font-semibold rounded-lg transition-colors cursor-pointer flex items-center space-x-1 shadow-sm"
                         >
                           {isImporting && <RefreshCw className="w-3.5 h-3.5 animate-spin" />}
                           <span>
@@ -3683,14 +3695,14 @@ export default function RoomWorkspacePage({
 
             {importModalTab === 'paste' && (
               <form onSubmit={handleImportDirectMarkdown} className="space-y-3 flex-1 flex flex-col">
-                <p className="text-xs text-slate-400 leading-relaxed font-mono">
+                <p className="text-xs text-muted leading-relaxed">
                   {outputLanguage === 'pt'
                     ? 'Cola apontamentos em Markdown já feitos anteriormente para juntar a esta pasta e enriquecer o Master Summary.'
                     : 'Paste existing Markdown notes directly to attach to this folder and update the Master Summary.'}
                 </p>
 
                 <div>
-                  <label className="block text-xs font-medium text-slate-300 mb-1 font-mono">
+                  <label className="block text-xs font-medium text-ink-soft mb-1">
                     {outputLanguage === 'pt' ? 'Título do Apontamento / Resumo *' : 'Title *'}
                   </label>
                   <input
@@ -3703,12 +3715,12 @@ export default function RoomWorkspacePage({
                     }
                     value={directNoteTitle}
                     onChange={(e) => setDirectNoteTitle(e.target.value)}
-                    className="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-indigo-500 font-mono"
+                    className="w-full bg-canvas border border-line-strong rounded-xl px-3 py-2 text-xs text-ink placeholder:text-faint focus:outline-none focus:border-accent"
                   />
                 </div>
 
                 <div className="flex-1 flex flex-col">
-                  <label className="block text-xs font-medium text-slate-300 mb-1 font-mono">
+                  <label className="block text-xs font-medium text-ink-soft mb-1">
                     {outputLanguage === 'pt' ? 'Conteúdo Markdown *' : 'Markdown Content *'}
                   </label>
                   <textarea
@@ -3721,26 +3733,26 @@ export default function RoomWorkspacePage({
                     }
                     value={directNoteContent}
                     onChange={(e) => setDirectNoteContent(e.target.value)}
-                    className="w-full flex-1 bg-slate-950 border border-slate-700 rounded-xl p-3 text-xs text-slate-200 placeholder-slate-500 font-mono focus:outline-none focus:border-indigo-500 leading-relaxed"
+                    className="w-full flex-1 bg-canvas border border-line-strong rounded-xl p-3 text-xs text-ink placeholder:text-faint focus:outline-none focus:border-accent leading-relaxed"
                   />
                 </div>
 
                 <div className="flex items-center justify-between pt-2">
-                  <span className="text-[10px] text-slate-500 font-mono">
+                  <span className="text-xs text-faint">
                     {directNoteContent.length} chars
                   </span>
                   <div className="flex items-center space-x-2">
                     <button
                       type="button"
                       onClick={() => setShowImportModal(false)}
-                      className="px-3 py-1.5 text-xs text-slate-400 hover:text-white transition-colors cursor-pointer"
+                      className="px-3 py-1.5 text-xs text-muted hover:text-ink transition-colors cursor-pointer"
                     >
                       {outputLanguage === 'pt' ? 'Cancelar' : 'Cancel'}
                     </button>
                     <button
                       type="submit"
                       disabled={isImportingDirectNote || !directNoteTitle.trim() || !directNoteContent.trim()}
-                      className="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 text-white text-xs font-semibold rounded-xl transition-colors cursor-pointer flex items-center space-x-1.5 shadow-md shadow-emerald-600/20 font-mono"
+                      className="px-4 py-2 bg-ok-solid hover:bg-ok-solid-hover disabled:opacity-50 text-on-accent text-xs font-semibold rounded-xl transition-colors cursor-pointer flex items-center space-x-1.5 shadow-md"
                     >
                       {isImportingDirectNote && <RefreshCw className="w-3.5 h-3.5 animate-spin" />}
                       <span>
@@ -3766,17 +3778,17 @@ export default function RoomWorkspacePage({
       {/* ========================================================================= */}
       {showCreateFolderModal && (
         <div className="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="max-w-md w-full bg-slate-900 border border-slate-800 rounded-2xl p-6 shadow-2xl space-y-4">
-            <div className="flex items-center justify-between border-b border-slate-800 pb-3">
+          <div className="max-w-md w-full bg-surface border border-line rounded-xl p-6 shadow-2xl space-y-4">
+            <div className="flex items-center justify-between border-b border-line pb-3">
               <div className="flex items-center space-x-2">
-                <Folder className="w-5 h-5 text-emerald-400" />
-                <h2 className="text-base font-bold text-white">
+                <Folder className="w-5 h-5 text-ok" />
+                <h2 className="text-base font-bold text-ink">
                   {outputLanguage === 'pt' ? 'Nova Subpasta' : 'New Subfolder'}
                 </h2>
               </div>
               <button
                 onClick={() => setShowCreateFolderModal(false)}
-                className="text-slate-400 hover:text-white transition-colors cursor-pointer text-sm"
+                className="text-muted hover:text-ink transition-colors cursor-pointer text-sm"
               >
                 ✕
               </button>
@@ -3784,12 +3796,12 @@ export default function RoomWorkspacePage({
 
             <form onSubmit={handleCreateSubfolderSubmit} className="space-y-4">
               <div>
-                <p className="text-[11px] text-slate-400 font-mono mb-2">
+                <p className="text-xs text-muted mb-2">
                   {outputLanguage === 'pt' ? 'Criar dentro de:' : 'Create under:'}{' '}
-                  <strong className="text-white">{createParentFolder?.name}</strong>
+                  <strong className="text-ink">{createParentFolder?.name}</strong>
                 </p>
 
-                <label className="block text-xs font-medium text-slate-300 mb-1 font-mono">
+                <label className="block text-xs font-medium text-ink-soft mb-1">
                   {outputLanguage === 'pt' ? 'Nome da Subpasta *' : 'Subfolder Name *'}
                 </label>
                 <input
@@ -3803,26 +3815,26 @@ export default function RoomWorkspacePage({
                   value={newFolderName}
                   onChange={(e) => setNewFolderName(e.target.value)}
                   autoFocus
-                  className="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-indigo-500 font-mono"
+                  className="w-full bg-canvas border border-line-strong rounded-xl px-3 py-2 text-xs text-ink placeholder:text-faint focus:outline-none focus:border-accent"
                 />
               </div>
 
               {isOwner && (
                 <div>
-                  <label className="block text-xs font-medium text-slate-300 mb-1 font-mono">
+                  <label className="block text-xs font-medium text-ink-soft mb-1">
                     {outputLanguage === 'pt' ? 'Tipo de Pasta' : 'Folder Type'}
                   </label>
-                  <div className="grid grid-cols-2 gap-2 text-xs font-mono">
+                  <div className="grid grid-cols-2 gap-2 text-xs">
                     <button
                       type="button"
                       onClick={() => setNewFolderType('project')}
                       className={`p-2 rounded-xl border text-left transition-colors cursor-pointer ${
                         newFolderType === 'project'
-                          ? 'bg-emerald-950/40 border-emerald-500 text-emerald-300 font-bold'
-                          : 'bg-slate-950 border-slate-800 text-slate-400'
+                          ? 'bg-ok-soft border-ok-line text-ok font-bold'
+                          : 'bg-canvas border-line text-muted'
                       }`}
                     >
-                      <Users className="w-3.5 h-3.5 mb-1 text-emerald-400" />
+                      <Users className="w-3.5 h-3.5 mb-1 text-ok" />
                       <div>{outputLanguage === 'pt' ? 'Projeto / Grupo' : 'Project / Group'}</div>
                     </button>
                     <button
@@ -3830,11 +3842,11 @@ export default function RoomWorkspacePage({
                       onClick={() => setNewFolderType('section')}
                       className={`p-2 rounded-xl border text-left transition-colors cursor-pointer ${
                         newFolderType === 'section'
-                          ? 'bg-indigo-950/40 border-indigo-500 text-indigo-300 font-bold'
-                          : 'bg-slate-950 border-slate-800 text-slate-400'
+                          ? 'bg-accent-soft border-accent text-accent-ink font-bold'
+                          : 'bg-canvas border-line text-muted'
                       }`}
                     >
-                      <Layers className="w-3.5 h-3.5 mb-1 text-indigo-400" />
+                      <Layers className="w-3.5 h-3.5 mb-1 text-accent-ink" />
                       <div>{outputLanguage === 'pt' ? 'Secção / Teóricas' : 'Section / Lecture'}</div>
                     </button>
                   </div>
@@ -3845,14 +3857,14 @@ export default function RoomWorkspacePage({
                 <button
                   type="button"
                   onClick={() => setShowCreateFolderModal(false)}
-                  className="px-3 py-1.5 text-xs text-slate-400 hover:text-white transition-colors cursor-pointer"
+                  className="px-3 py-1.5 text-xs text-muted hover:text-ink transition-colors cursor-pointer"
                 >
                   {outputLanguage === 'pt' ? 'Cancelar' : 'Cancel'}
                 </button>
                 <button
                   type="submit"
                   disabled={isCreatingFolder || !newFolderName.trim()}
-                  className="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 text-white text-xs font-semibold rounded-xl transition-colors cursor-pointer flex items-center space-x-1.5 shadow-md shadow-emerald-600/20 font-mono"
+                  className="px-4 py-2 bg-ok-solid hover:bg-ok-solid-hover disabled:opacity-50 text-on-accent text-xs font-semibold rounded-xl transition-colors cursor-pointer flex items-center space-x-1.5 shadow-md"
                 >
                   {isCreatingFolder && <RefreshCw className="w-3.5 h-3.5 animate-spin" />}
                   <span>
@@ -3876,17 +3888,17 @@ export default function RoomWorkspacePage({
       {/* ========================================================================= */}
       {showRenameModal && renamingFolder && (
         <div className="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="max-w-md w-full bg-slate-900 border border-slate-800 rounded-2xl p-6 shadow-2xl space-y-4">
-            <div className="flex items-center justify-between border-b border-slate-800 pb-3">
+          <div className="max-w-md w-full bg-surface border border-line rounded-xl p-6 shadow-2xl space-y-4">
+            <div className="flex items-center justify-between border-b border-line pb-3">
               <div className="flex items-center space-x-2">
-                <Pencil className="w-5 h-5 text-indigo-400" />
-                <h2 className="text-base font-bold text-white">
+                <Pencil className="w-5 h-5 text-accent-ink" />
+                <h2 className="text-base font-bold text-ink">
                   {outputLanguage === 'pt' ? 'Renomear Pasta' : 'Rename Folder'}
                 </h2>
               </div>
               <button
                 onClick={() => setShowRenameModal(false)}
-                className="text-slate-400 hover:text-white transition-colors cursor-pointer text-sm"
+                className="text-muted hover:text-ink transition-colors cursor-pointer text-sm"
               >
                 ✕
               </button>
@@ -3894,7 +3906,7 @@ export default function RoomWorkspacePage({
 
             <form onSubmit={handleRenameFolderSubmit} className="space-y-4">
               <div>
-                <label className="block text-xs font-medium text-slate-300 mb-1 font-mono">
+                <label className="block text-xs font-medium text-ink-soft mb-1">
                   {outputLanguage === 'pt' ? 'Novo Nome da Pasta *' : 'New Folder Name *'}
                 </label>
                 <input
@@ -3903,7 +3915,7 @@ export default function RoomWorkspacePage({
                   value={renamingFolderName}
                   onChange={(e) => setRenamingFolderName(e.target.value)}
                   autoFocus
-                  className="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-indigo-500 font-mono"
+                  className="w-full bg-canvas border border-line-strong rounded-xl px-3 py-2 text-xs text-ink placeholder:text-faint focus:outline-none focus:border-accent"
                 />
               </div>
 
@@ -3911,14 +3923,14 @@ export default function RoomWorkspacePage({
                 <button
                   type="button"
                   onClick={() => setShowRenameModal(false)}
-                  className="px-3 py-1.5 text-xs text-slate-400 hover:text-white transition-colors cursor-pointer"
+                  className="px-3 py-1.5 text-xs text-muted hover:text-ink transition-colors cursor-pointer"
                 >
                   {outputLanguage === 'pt' ? 'Cancelar' : 'Cancel'}
                 </button>
                 <button
                   type="submit"
                   disabled={isRenamingFolder || !renamingFolderName.trim()}
-                  className="px-4 py-2 bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 text-white text-xs font-semibold rounded-xl transition-colors cursor-pointer flex items-center space-x-1.5 shadow-md shadow-indigo-600/20 font-mono"
+                  className="px-4 py-2 bg-accent hover:bg-accent-hover disabled:opacity-50 text-on-accent text-xs font-semibold rounded-xl transition-colors cursor-pointer flex items-center space-x-1.5 shadow-md"
                 >
                   {isRenamingFolder && <RefreshCw className="w-3.5 h-3.5 animate-spin" />}
                   <span>
@@ -3942,11 +3954,11 @@ export default function RoomWorkspacePage({
       {/* ========================================================================= */}
       {previewNote && (
         <div className="fixed inset-0 z-50 bg-black/75 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="max-w-3xl w-full bg-slate-900 border border-slate-800 rounded-2xl p-6 shadow-2xl space-y-4 max-h-[85vh] flex flex-col">
-            <div className="flex items-center justify-between border-b border-slate-800 pb-3">
+          <div className="max-w-3xl w-full bg-surface border border-line rounded-xl p-6 shadow-2xl space-y-4 max-h-[85vh] flex flex-col">
+            <div className="flex items-center justify-between border-b border-line pb-3">
               <div className="space-y-0.5">
-                <h3 className="text-sm font-bold text-white">{previewNote.title}</h3>
-                <p className="text-[11px] text-slate-400 font-mono">
+                <h3 className="text-sm font-bold text-ink">{previewNote.title}</h3>
+                <p className="text-xs text-muted">
                   {outputLanguage === 'pt' ? 'Por ' : 'By '}
                   {previewNote.author_email} •{' '}
                   {new Date(previewNote.imported_at).toLocaleString(
@@ -3962,10 +3974,10 @@ export default function RoomWorkspacePage({
                     setCopiedNote(true);
                     setTimeout(() => setCopiedNote(false), 2000);
                   }}
-                  className="px-2.5 py-1 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded text-xs font-mono transition-colors flex items-center space-x-1 cursor-pointer"
+                  className="px-2.5 py-1 bg-raised hover:bg-raised-strong text-ink-soft rounded text-xs transition-colors flex items-center space-x-1 cursor-pointer"
                 >
                   {copiedNote ? (
-                    <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />
+                    <CheckCircle2 className="w-3.5 h-3.5 text-ok" />
                   ) : (
                     <Copy className="w-3.5 h-3.5" />
                   )}
@@ -3990,12 +4002,12 @@ export default function RoomWorkspacePage({
                     onClick={() => handleDeleteNote(previewNote)}
                     disabled={deletingNoteId === previewNote.id}
                     title={outputLanguage === 'pt' ? 'Apagar Aula' : 'Delete Lecture'}
-                    className="px-2.5 py-1 bg-slate-800 hover:bg-rose-950/60 border border-slate-700 hover:border-rose-600/50 text-slate-300 hover:text-rose-400 rounded text-xs font-mono transition-colors flex items-center space-x-1 cursor-pointer"
+                    className="px-2.5 py-1 bg-raised hover:bg-danger-soft border border-line-strong hover:border-danger-line text-ink-soft hover:text-danger rounded text-xs transition-colors flex items-center space-x-1 cursor-pointer"
                   >
                     {deletingNoteId === previewNote.id ? (
                       <RefreshCw className="w-3.5 h-3.5 animate-spin" />
                     ) : (
-                      <Trash2 className="w-3.5 h-3.5 text-rose-400" />
+                      <Trash2 className="w-3.5 h-3.5 text-danger" />
                     )}
                     <span>{outputLanguage === 'pt' ? 'Apagar' : 'Delete'}</span>
                   </button>
@@ -4003,7 +4015,7 @@ export default function RoomWorkspacePage({
 
                 <button
                   onClick={() => setPreviewNote(null)}
-                  className="text-slate-400 hover:text-white transition-colors cursor-pointer text-sm pl-2"
+                  className="text-muted hover:text-ink transition-colors cursor-pointer text-sm pl-2"
                 >
                   ✕
                 </button>
@@ -4022,17 +4034,17 @@ export default function RoomWorkspacePage({
       {/* ========================================================================= */}
       {showAddMemberModal && (
         <div className="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="max-w-md w-full bg-slate-900 border border-slate-800 rounded-2xl p-6 shadow-2xl space-y-4">
-            <div className="flex items-center justify-between border-b border-slate-800 pb-3">
+          <div className="max-w-md w-full bg-surface border border-line rounded-xl p-6 shadow-2xl space-y-4">
+            <div className="flex items-center justify-between border-b border-line pb-3">
               <div className="flex items-center space-x-2">
-                <UserPlus className="w-5 h-5 text-indigo-400" />
-                <h2 className="text-base font-bold text-white">
+                <UserPlus className="w-5 h-5 text-accent-ink" />
+                <h2 className="text-base font-bold text-ink">
                   {outputLanguage === 'pt' ? 'Adicionar Aluno à Sala' : 'Add Student to Room'}
                 </h2>
               </div>
               <button
                 onClick={() => setShowAddMemberModal(false)}
-                className="text-slate-400 hover:text-white transition-colors cursor-pointer text-sm"
+                className="text-muted hover:text-ink transition-colors cursor-pointer text-sm"
               >
                 ✕
               </button>
@@ -4040,7 +4052,7 @@ export default function RoomWorkspacePage({
 
             <form onSubmit={handleAddMember} className="space-y-4">
               <div className="space-y-1.5">
-                <label className="text-xs font-medium text-slate-300">
+                <label className="text-xs font-medium text-ink-soft">
                   {outputLanguage === 'pt' ? 'Email do Aluno *' : 'Student Email *'}
                 </label>
                 <input
@@ -4049,9 +4061,9 @@ export default function RoomWorkspacePage({
                   placeholder="colega@universidade.pt"
                   value={newMemberEmail}
                   onChange={(e) => setNewMemberEmail(e.target.value)}
-                  className="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-indigo-500 font-mono"
+                  className="w-full bg-canvas border border-line-strong rounded-xl px-3 py-2 text-xs text-ink placeholder:text-faint focus:outline-none focus:border-accent"
                 />
-                <p className="text-[10px] text-slate-500">
+                <p className="text-xs text-faint">
                   {outputLanguage === 'pt'
                     ? 'O aluno terá acesso imediato à árvore de cadeiras e a todos os Master Summaries.'
                     : 'The student will gain immediate access to courses and all Master Summaries.'}
@@ -4062,14 +4074,14 @@ export default function RoomWorkspacePage({
                 <button
                   type="button"
                   onClick={() => setShowAddMemberModal(false)}
-                  className="px-3 py-1.5 text-xs text-slate-400 hover:text-white transition-colors cursor-pointer"
+                  className="px-3 py-1.5 text-xs text-muted hover:text-ink transition-colors cursor-pointer"
                 >
                   {outputLanguage === 'pt' ? 'Cancelar' : 'Cancel'}
                 </button>
                 <button
                   type="submit"
                   disabled={addingMember || !newMemberEmail.trim()}
-                  className="px-4 py-2 bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 text-white text-xs font-semibold rounded-xl transition-colors cursor-pointer flex items-center space-x-1.5 shadow-md shadow-indigo-600/20"
+                  className="px-4 py-2 bg-accent hover:bg-accent-hover disabled:opacity-50 text-on-accent text-xs font-semibold rounded-xl transition-colors cursor-pointer flex items-center space-x-1.5 shadow-md"
                 >
                   {addingMember && <RefreshCw className="w-3.5 h-3.5 animate-spin" />}
                   <span>

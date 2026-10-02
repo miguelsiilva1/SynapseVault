@@ -1,25 +1,18 @@
 'use client';
 
 import React, { useState, useEffect, useMemo, useRef } from 'react';
-import Link from 'next/link';
 import {
   FileAudio,
   FileText,
   Upload,
-  Cpu,
   Download,
   Copy,
   CheckCircle2,
   AlertCircle,
-  Sparkles,
   Plus,
-  Globe,
   X,
-  LogOut,
   ShieldCheck,
-  Activity,
   History,
-  GraduationCap,
   Folder,
   FolderOpen,
   ChevronRight,
@@ -34,6 +27,7 @@ import {
 
 import { compressAudio } from '@/lib/audio/compressAudio';
 import { createClient } from '@/lib/supabase/client';
+import AppHeader from '@/components/AppHeader';
 import type { PersonalNoteRecord } from '@/lib/db/notes';
 import { renderMarkdown } from '@/lib/utils/markdownRenderer';
 
@@ -107,7 +101,6 @@ export default function Home() {
   // Auth State
   const [currentUser, setCurrentUser] = useState<{ email?: string } | null>(null);
   const [authLoading, setAuthLoading] = useState(true);
-  const [isAdmin, setIsAdmin] = useState(false);
   const [authEmailInput, setAuthEmailInput] = useState('');
   const [authMessage, setAuthMessage] = useState('');
 
@@ -227,26 +220,6 @@ export default function Home() {
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps -- reload only when the user changes
   }, [currentUser]);
-
-  // Ask the server whether the signed-in user is an administrator
-  useEffect(() => {
-    let cancelled = false;
-    (async () => {
-      let admin = false;
-      if (currentUser?.email) {
-        try {
-          const res = await fetch('/api/me');
-          if (res.ok) admin = Boolean((await res.json()).isAdmin);
-        } catch {
-          // non-blocking
-        }
-      }
-      if (!cancelled) setIsAdmin(admin);
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, [currentUser?.email]);
 
   // Group personal notes by course code
   const groupedPersonalNotes = useMemo(() => {
@@ -848,11 +821,11 @@ $$
 
   if (authLoading) {
     return (
-      <div className="min-h-screen bg-[#090d16] flex items-center justify-center text-slate-400 font-sans">
+      <div className="min-h-screen bg-canvas flex items-center justify-center text-muted font-sans">
         <div className="flex flex-col items-center space-y-3">
-          <div className="w-6 h-6 border-2 border-indigo-500 border-t-transparent rounded-full animate-spin" />
-          <span className="text-xs font-mono uppercase tracking-wider text-slate-500">
-            {outputLanguage === 'pt' ? 'A verificar sessão académica...' : 'Verifying session...'}
+          <div className="w-6 h-6 border-2 border-accent border-t-transparent rounded-full animate-spin" />
+          <span className="text-xs text-faint">
+            {outputLanguage === 'pt' ? 'A verificar sessão...' : 'Verifying session...'}
           </span>
         </div>
       </div>
@@ -860,158 +833,47 @@ $$
   }
 
   return (
-    <div className="min-h-screen bg-[#090d16] text-slate-100 flex flex-col font-sans">
-      {/* Top Navbar */}
-      <header className="border-b border-slate-800/80 bg-slate-950/90 backdrop-blur sticky top-0 z-40 px-6 py-3 flex flex-wrap items-center justify-between gap-4">
-        {/* Brand Left */}
-        <div className="flex items-center space-x-3">
-          <div className="p-2 bg-linear-to-tr from-indigo-600 to-violet-500 rounded-xl shadow-md shadow-indigo-600/20">
-            <Cpu className="w-4 h-4 text-white" />
-          </div>
-          <div>
-            <div className="flex items-center space-x-2">
-              <h1 className="text-sm font-bold tracking-tight text-white">SynapseVault</h1>
-              <span className="px-1.5 py-0.2 text-[9px] uppercase font-mono font-bold tracking-wider bg-indigo-950 border border-indigo-700/60 text-indigo-300 rounded">
-                Studio
-              </span>
-            </div>
-            <p className="text-[11px] text-slate-400 font-mono">
-              {outputLanguage === 'pt'
-                ? 'Síntese Académica para Obsidian'
-                : 'Academic Synthesis for Obsidian'}
-            </p>
-          </div>
-        </div>
-
-        {/* Global Controls & Navigation */}
-        <div className="flex items-center space-x-3">
-          {/* Navigation Links (Salas & Histórico) */}
-          {currentUser && (
-            <div className="flex items-center space-x-2">
-              <Link
-                href="/rooms"
-                className="flex items-center space-x-1.5 px-3 py-1.5 bg-violet-950/60 hover:bg-violet-900/80 border border-violet-700/60 text-violet-200 hover:text-white rounded-lg text-xs font-mono font-medium transition-colors shadow-sm"
-                title={outputLanguage === 'pt' ? 'Salas de Estudo Colaborativas' : 'Study Rooms'}
-              >
-                <GraduationCap className="w-3.5 h-3.5 text-violet-400" />
-                <span>Salas</span>
-              </Link>
-
-              <button
-                onClick={() => {
-                  setShowHistoryDrawer(true);
-                  loadPersonalNotes();
-                }}
-                className="flex items-center space-x-1.5 px-3 py-1.5 bg-slate-900 hover:bg-slate-800 border border-slate-800 text-slate-300 hover:text-white rounded-lg text-xs font-mono transition-colors cursor-pointer"
-                title={outputLanguage === 'pt' ? 'Meu Histórico Pessoal' : 'Personal History'}
-              >
-                <History className="w-3.5 h-3.5 text-indigo-400" />
-                <span>Histórico</span>
-                {personalNotes.length > 0 && (
-                  <span className="px-1.5 py-0.2 bg-indigo-600 text-white rounded-full text-[10px] font-bold">
-                    {personalNotes.length}
-                  </span>
-                )}
-              </button>
-            </div>
-          )}
-
-          {/* Separator */}
-          {currentUser && <div className="h-4 w-px bg-slate-800" />}
-
-          {/* Language Selector */}
-          <div className="flex items-center bg-slate-900 border border-slate-800 rounded-lg p-0.5 text-xs font-mono">
-            <Globe className="w-3.5 h-3.5 text-slate-400 ml-2 mr-1" />
-            <button
-              onClick={() => {
-                setOutputLanguage('pt');
-                localStorage.setItem('synapse_language', 'pt');
-              }}
-              className={`px-2 py-0.5 rounded font-semibold transition-colors cursor-pointer ${
-                outputLanguage === 'pt' ? 'bg-indigo-600 text-white' : 'text-slate-400 hover:text-white'
-              }`}
-            >
-              PT
-            </button>
-            <button
-              onClick={() => {
-                setOutputLanguage('en');
-                localStorage.setItem('synapse_language', 'en');
-              }}
-              className={`px-2 py-0.5 rounded font-semibold transition-colors cursor-pointer ${
-                outputLanguage === 'en' ? 'bg-indigo-600 text-white' : 'text-slate-400 hover:text-white'
-              }`}
-            >
-              EN
-            </button>
-          </div>
-
-          {/* Model Selector (Only displayed when authenticated) */}
-          {currentUser && (
-            <div className="flex items-center bg-slate-900 border border-slate-800 rounded-lg px-2 py-1 text-xs font-mono">
-              <Sparkles className="w-3.5 h-3.5 text-indigo-400 mr-1.5 shrink-0" />
-              <select
-                value={modelPreset}
-                onChange={(e) => setModelPreset(e.target.value)}
-                className="bg-transparent text-slate-200 text-xs font-medium focus:outline-none pr-1 cursor-pointer font-mono"
-              >
-                {AVAILABLE_MODELS.map((m) => (
-                  <option key={m.id} value={m.id} className="bg-slate-900 text-white">
-                    {m.label}
-                  </option>
-                ))}
-              </select>
-            </div>
-          )}
-
-          {/* Separator */}
-          {currentUser && <div className="h-4 w-px bg-slate-800" />}
-
-          {/* Admin & Profile */}
-          {currentUser && (
-            <div className="flex items-center space-x-2">
-              {isAdmin && (
-                <Link
-                  href="/admin"
-                  className="flex items-center space-x-1.5 px-2.5 py-1 bg-indigo-950/80 hover:bg-indigo-900 border border-indigo-700/60 text-indigo-300 hover:text-white rounded-lg text-xs font-mono font-medium transition-colors"
-                  title="Consola de Telemetria de Infraestrutura"
-                >
-                  <Activity className="w-3.5 h-3.5 text-indigo-400" />
-                  <span>Admin</span>
-                </Link>
-              )}
-
-              <div className="flex items-center space-x-2 bg-slate-900 border border-slate-800 rounded-lg px-2.5 py-1 text-xs">
-                <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
-                <span className="text-slate-300 max-w-32.5 truncate font-mono text-[11px]">{currentUser.email}</span>
-                <button
-                  onClick={handleSignOut}
-                  title={outputLanguage === 'pt' ? 'Terminar Sessão' : 'Sign Out'}
-                  className="text-slate-400 hover:text-rose-400 transition-colors ml-1 cursor-pointer"
-                >
-                  <LogOut className="w-3.5 h-3.5" />
-                </button>
-              </div>
-            </div>
-          )}
-        </div>
-      </header>
+    <div className="min-h-screen bg-canvas text-ink flex flex-col font-sans">
+      <AppHeader
+        active="studio"
+        language={outputLanguage}
+        onLanguageChange={(lang) => {
+          setOutputLanguage(lang);
+          localStorage.setItem('synapse_language', lang);
+        }}
+        email={currentUser?.email}
+        onSignOut={handleSignOut}
+      >
+        {currentUser && (
+          <button
+            onClick={() => {
+              setShowHistoryDrawer(true);
+              loadPersonalNotes();
+            }}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-line text-xs font-medium text-ink-soft hover:bg-raised transition-colors cursor-pointer"
+          >
+            <History className="w-3.5 h-3.5" />
+            <span>{outputLanguage === 'pt' ? 'As minhas notas' : 'My notes'}</span>
+            {personalNotes.length > 0 && <span className="text-faint">{personalNotes.length}</span>}
+          </button>
+        )}
+      </AppHeader>
 
 
 
       {/* Auth Gate: If unauthenticated, show locked entry portal */}
       {!currentUser ? (
         <main className="flex-1 flex items-center justify-center p-6">
-          <div className="max-w-md w-full bg-[#0f172a] border border-slate-800 rounded-2xl p-8 shadow-2xl space-y-6 text-center">
-            <div className="inline-flex p-3 bg-indigo-950/80 border border-indigo-800/40 rounded-2xl text-indigo-400 shadow-inner">
+          <div className="max-w-md w-full bg-surface border border-line rounded-xl p-8 shadow-2xl space-y-6 text-center">
+            <div className="inline-flex p-3 bg-accent-soft border border-accent-line rounded-xl text-accent-ink shadow-inner">
               <ShieldCheck className="w-8 h-8" />
             </div>
 
             <div className="space-y-2">
-              <h2 className="text-xl font-bold text-white tracking-tight">
+              <h2 className="text-xl font-bold text-ink tracking-tight">
                 {outputLanguage === 'pt' ? 'Acesso Restrito ao Grupo' : 'Restricted Academic Portal'}
               </h2>
-              <p className="text-xs text-slate-400 leading-relaxed">
+              <p className="text-xs text-muted leading-relaxed">
                 {outputLanguage === 'pt'
                   ? 'O SynapseVault é de uso exclusivo da nossa turma/grupo de estudo. Autentica-te com uma conta autorizada na whitelist para aceder ao estúdio de síntese e às notas.'
                   : 'SynapseVault is restricted to our university study group. Authenticate with an authorized account to access the workspace.'}
@@ -1022,7 +884,7 @@ $$
               {/* Google Button */}
               <button
                 onClick={handleGoogleSignIn}
-                className="w-full py-2.5 px-4 bg-white hover:bg-slate-100 text-slate-900 text-xs font-semibold rounded-xl flex items-center justify-center space-x-2 transition-colors shadow-sm"
+                className="w-full py-2.5 px-4 bg-white hover:bg-slate-100 text-slate-900 border border-line-strong text-xs font-semibold rounded-xl flex items-center justify-center space-x-2 transition-colors"
               >
                 <svg className="w-4 h-4" viewBox="0 0 24 24">
                   <path
@@ -1048,7 +910,7 @@ $$
               {/* GitHub Button */}
               <button
                 onClick={handleGitHubSignIn}
-                className="w-full py-2.5 px-4 bg-[#24292F] hover:bg-[#1f2328] text-white text-xs font-semibold rounded-xl flex items-center justify-center space-x-2 transition-colors border border-slate-700 shadow-sm"
+                className="w-full py-2.5 px-4 bg-[#24292F] hover:bg-[#1f2328] text-on-accent text-xs font-semibold rounded-xl flex items-center justify-center space-x-2 transition-colors border border-line-strong shadow-sm"
               >
                 <svg className="w-4 h-4 fill-current" viewBox="0 0 24 24">
                   <path d="M12 0C5.37 0 0 5.37 0 12c0 5.31 3.435 9.795 8.205 11.385.6.105.825-.255.825-.57 0-.285-.015-1.23-.015-2.235-3.015.555-3.795-.735-4.035-1.41-.135-.345-.72-1.41-1.23-1.695-.42-.225-1.02-.78-.015-.795.945-.015 1.62.87 1.845 1.23 1.08 1.815 2.805 1.305 3.495.99.105-.78.42-1.305.765-1.605-2.67-.3-5.46-1.335-5.46-5.925 0-1.305.465-2.385 1.23-3.225-.12-.3-.54-1.53.12-3.18 0 0 1.005-.315 3.3 1.23.96-.27 1.98-.405 3-.405s2.04.135 3 .405c2.295-1.56 3.3-1.23 3.3-1.23.66 1.65.24 2.88.12 3.18.765.84 1.23 1.905 1.23 3.225 0 4.605-2.805 5.625-5.475 5.925.435.375.81 1.095.81 2.22 0 1.605-.015 2.895-.015 3.3 0 .315.225.69.825.57A12.02 12.02 0 0024 12c0-6.63-5.37-12-12-12z" />
@@ -1058,17 +920,17 @@ $$
             </div>
 
             <div className="flex items-center my-2">
-              <div className="flex-1 border-t border-slate-800" />
-              <span className="px-2 text-[10px] uppercase text-slate-500 font-mono tracking-wider">
+              <div className="flex-1 border-t border-line" />
+              <span className="px-2 text-xs text-faint">
                 {outputLanguage === 'pt' ? 'ou email' : 'or email'}
               </span>
-              <div className="flex-1 border-t border-slate-800" />
+              <div className="flex-1 border-t border-line" />
             </div>
 
             {/* Magic Link */}
             <form onSubmit={handleMagicLinkSignIn} className="space-y-3 text-left">
               <div>
-                <label className="block text-xs font-medium text-slate-300 mb-1">
+                <label className="block text-xs font-medium text-ink-soft mb-1">
                   {outputLanguage === 'pt' ? 'Email Universitário' : 'University Email'}
                 </label>
                 <input
@@ -1076,20 +938,20 @@ $$
                   placeholder="aluno@universidade.pt"
                   value={authEmailInput}
                   onChange={(e) => setAuthEmailInput(e.target.value)}
-                  className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3.5 py-2 text-xs text-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                  className="w-full bg-surface border border-line-strong rounded-xl px-3.5 py-2 text-xs text-ink focus:outline-none focus:ring-2 focus:ring-accent"
                   required
                 />
               </div>
 
               {authMessage && (
-                <div className="text-xs text-indigo-300 bg-indigo-950/40 border border-indigo-900/50 rounded-lg p-2.5">
+                <div className="text-xs text-accent-ink bg-accent-soft border border-accent-line rounded-lg p-2.5">
                   {authMessage}
                 </div>
               )}
 
               <button
                 type="submit"
-                className="w-full py-2 bg-indigo-600 hover:bg-indigo-500 text-xs font-medium text-white rounded-xl transition-colors shadow-sm"
+                className="w-full py-2 bg-accent hover:bg-accent-hover text-xs font-medium text-on-accent rounded-xl transition-colors shadow-sm"
               >
                 {outputLanguage === 'pt' ? 'Enviar Link de Acesso' : 'Send Access Link'}
               </button>
@@ -1102,14 +964,14 @@ $$
           {/* Left Column: Input Form & Uploads */}
           <section className="lg:col-span-5 space-y-6">
           {/* Metadata Card */}
-          <div className="bg-[#0f172a] border border-slate-800 rounded-xl p-5 shadow-sm space-y-4">
+          <div className="bg-surface border border-line rounded-xl p-5 shadow-sm space-y-4">
             <div className="flex items-center justify-between">
-              <h2 className="text-sm font-semibold uppercase tracking-wider text-slate-400">
-                {outputLanguage === 'pt' ? 'Metadados da Sessão' : 'Session Metadata'}
+              <h2 className="text-sm font-semibold text-muted">
+                {outputLanguage === 'pt' ? 'Aula' : 'Lecture'}
               </h2>
               <button
                 onClick={() => setIsCreatingCourse(true)}
-                className="text-xs text-indigo-400 hover:text-indigo-300 flex items-center space-x-1 transition-colors"
+                className="text-xs text-accent-ink hover:text-accent-ink flex items-center space-x-1 transition-colors"
               >
                 <Plus className="w-3.5 h-3.5" />
                 <span>{outputLanguage === 'pt' ? 'Nova Cadeira' : 'New Course'}</span>
@@ -1118,7 +980,7 @@ $$
 
             {/* Course Selector */}
             <div>
-              <label className="block text-xs font-medium text-slate-300 mb-1.5">
+              <label className="block text-xs font-medium text-ink-soft mb-1.5">
                 {outputLanguage === 'pt' ? 'Cadeira / Disciplina' : 'Target Academic Course'}
               </label>
               <select
@@ -1127,7 +989,7 @@ $$
                   const course = courses.find((c) => c.code === e.target.value);
                   if (course) setSelectedCourse(course);
                 }}
-                className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:ring-2 focus:ring-indigo-500 cursor-pointer"
+                className="w-full bg-surface border border-line-strong rounded-lg px-3 py-2 text-sm text-ink focus:outline-none focus:ring-2 focus:ring-accent cursor-pointer"
               >
                 {courses.map((course) => (
                   <option key={course.code} value={course.code}>
@@ -1139,7 +1001,7 @@ $$
 
             {/* Lecture Title */}
             <div>
-              <label className="block text-xs font-medium text-slate-300 mb-1.5">
+              <label className="block text-xs font-medium text-ink-soft mb-1.5">
                 {outputLanguage === 'pt' ? 'Título da Aula / Tópico' : 'Lecture / Topic Title'}
               </label>
               <input
@@ -1151,32 +1013,32 @@ $$
                 }
                 value={lectureTitle}
                 onChange={(e) => setLectureTitle(e.target.value)}
-                className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-sm text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                className="w-full bg-surface border border-line-strong rounded-lg px-3 py-2 text-sm text-ink placeholder:text-faint focus:outline-none focus:ring-2 focus:ring-accent"
               />
             </div>
 
             {/* Date */}
             <div>
-              <label className="block text-xs font-medium text-slate-300 mb-1.5">
+              <label className="block text-xs font-medium text-ink-soft mb-1.5">
                 {outputLanguage === 'pt' ? 'Data da Aula' : 'Date'}
               </label>
               <input
                 type="date"
                 value={lectureDate}
                 onChange={(e) => setLectureDate(e.target.value)}
-                className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                className="w-full bg-surface border border-line-strong rounded-lg px-3 py-2 text-sm text-ink focus:outline-none focus:ring-2 focus:ring-accent"
               />
             </div>
           </div>
 
           {/* Ingestion Dropzones */}
-          <div className="bg-[#0f172a] border border-slate-800 rounded-xl p-5 shadow-sm space-y-4">
-            <h2 className="text-sm font-semibold uppercase tracking-wider text-slate-400">
-              {outputLanguage === 'pt' ? 'Ingestão de Materiais' : 'Artifact Ingestion'}
+          <div className="bg-surface border border-line rounded-xl p-5 shadow-sm space-y-4">
+            <h2 className="text-sm font-semibold text-muted">
+              {outputLanguage === 'pt' ? 'Materiais' : 'Materials'}
             </h2>
 
             {/* Audio Upload */}
-            <div className="border border-dashed border-slate-700 hover:border-indigo-500/60 rounded-xl p-4 bg-slate-900/60 transition-colors">
+            <div className="border border-dashed border-line-strong hover:border-accent-line rounded-xl p-4 bg-surface transition-colors">
               <label className="cursor-pointer block">
                 <input
                   type="file"
@@ -1185,18 +1047,18 @@ $$
                   className="hidden"
                 />
                 <div className="flex items-start space-x-3">
-                  <div className="p-2.5 bg-indigo-950/70 border border-indigo-800/40 rounded-lg text-indigo-400">
+                  <div className="p-2.5 bg-accent-soft border border-accent-line rounded-lg text-accent-ink">
                     <FileAudio className="w-5 h-5" />
                   </div>
                   <div className="flex-1">
-                    <span className="text-sm font-medium text-slate-200 block">
+                    <span className="text-sm font-medium text-ink block">
                       {audioFile
                         ? audioFile.name
                         : outputLanguage === 'pt'
                         ? 'Arrasta ou seleciona gravação da aula'
                         : 'Select or drop lecture audio'}
                     </span>
-                    <span className="text-xs text-slate-400">
+                    <span className="text-xs text-muted">
                       {outputLanguage === 'pt'
                         ? 'MP3, WAV, M4A, WebM (comprimido para 16kHz mono no browser)'
                         : 'MP3, WAV, M4A, WebM (downsampled to 16kHz mono in browser)'}
@@ -1207,14 +1069,14 @@ $$
 
               {/* Compression Progress Bar */}
               {compressionProgress !== null && (
-                <div className="mt-3 pt-3 border-t border-slate-800">
-                  <div className="flex justify-between text-xs text-slate-400 mb-1">
+                <div className="mt-3 pt-3 border-t border-line">
+                  <div className="flex justify-between text-xs text-muted mb-1">
                     <span>{outputLanguage === 'pt' ? 'Otimização Web Audio' : 'Web Audio Optimization'}</span>
                     <span>{compressionProgress}%</span>
                   </div>
-                  <div className="w-full bg-slate-800 h-1.5 rounded-full overflow-hidden">
+                  <div className="w-full bg-raised h-1.5 rounded-full overflow-hidden">
                     <div
-                      className="bg-indigo-500 h-full transition-all duration-150"
+                      className="bg-accent-hover h-full transition-all duration-150"
                       style={{ width: `${compressionProgress}%` }}
                     />
                   </div>
@@ -1223,22 +1085,22 @@ $$
             </div>
 
             {/* PDF Upload */}
-            <div className="border border-dashed border-slate-700 hover:border-indigo-500/60 rounded-xl p-4 bg-slate-900/60 transition-colors">
+            <div className="border border-dashed border-line-strong hover:border-accent-line rounded-xl p-4 bg-surface transition-colors">
               <label className="cursor-pointer block">
                 <input type="file" accept="application/pdf" onChange={handlePdfSelect} className="hidden" />
                 <div className="flex items-start space-x-3">
-                  <div className="p-2.5 bg-slate-800 border border-slate-700 rounded-lg text-slate-300">
+                  <div className="p-2.5 bg-raised border border-line-strong rounded-lg text-ink-soft">
                     <FileText className="w-5 h-5" />
                   </div>
                   <div className="flex-1">
-                    <span className="text-sm font-medium text-slate-200 block">
+                    <span className="text-sm font-medium text-ink block">
                       {pdfFile
                         ? pdfFile.name
                         : outputLanguage === 'pt'
                         ? 'Arrasta ou seleciona slides da aula (PDF)'
                         : 'Select or drop lecture slides (PDF)'}
                     </span>
-                    <span className="text-xs text-slate-400">
+                    <span className="text-xs text-muted">
                       {outputLanguage === 'pt'
                         ? 'Texto extraído diretamente sem gastar tokens de visão'
                         : 'Digital text streams extracted directly to conserve vision tokens'}
@@ -1249,17 +1111,17 @@ $$
             </div>
 
             {/* Markdown Direct Paste */}
-            <div className="border border-dashed border-slate-700 hover:border-indigo-500/60 rounded-xl p-4 bg-slate-900/60 transition-colors space-y-2.5">
+            <div className="border border-dashed border-line-strong hover:border-accent-line rounded-xl p-4 bg-surface transition-colors space-y-2.5">
               <div className="flex items-center justify-between">
                 <div className="flex items-center space-x-3">
-                  <div className="p-2.5 bg-emerald-950/60 border border-emerald-800/40 rounded-lg text-emerald-400">
+                  <div className="p-2.5 bg-ok-soft border border-ok-line rounded-lg text-ok">
                     <FileCode className="w-5 h-5" />
                   </div>
                   <div>
-                    <span className="text-sm font-medium text-slate-200 block">
+                    <span className="text-sm font-medium text-ink block">
                       {outputLanguage === 'pt' ? 'Colar Resumo em Markdown' : 'Paste Markdown Summary'}
                     </span>
-                    <span className="text-xs text-slate-400">
+                    <span className="text-xs text-muted">
                       {outputLanguage === 'pt'
                         ? 'Resumos já feitos ou apontamentos de outras ferramentas'
                         : 'Existing lecture notes or external summaries'}
@@ -1270,7 +1132,7 @@ $$
                   <button
                     type="button"
                     onClick={() => setPastedMarkdown('')}
-                    className="text-[11px] text-slate-400 hover:text-rose-400 font-mono transition-colors cursor-pointer"
+                    className="text-xs text-muted hover:text-danger transition-colors cursor-pointer"
                   >
                     {outputLanguage === 'pt' ? 'Limpar' : 'Clear'}
                   </button>
@@ -1286,12 +1148,12 @@ $$
                 }
                 value={pastedMarkdown}
                 onChange={(e) => setPastedMarkdown(e.target.value)}
-                className="w-full bg-slate-950 border border-slate-800 rounded-lg p-2.5 text-xs text-slate-200 placeholder-slate-500 font-mono focus:outline-none focus:ring-1 focus:ring-indigo-500 leading-relaxed"
+                className="w-full bg-canvas border border-line rounded-lg p-2.5 text-xs text-ink placeholder:text-faint focus:outline-none focus:ring-1 focus:ring-accent leading-relaxed"
               />
 
               {pastedMarkdown.trim() && (
                 <div className="flex items-center justify-between pt-1">
-                  <span className="text-[10px] text-slate-500 font-mono">
+                  <span className="text-xs text-faint">
                     {pastedMarkdown.length} {outputLanguage === 'pt' ? 'caracteres' : 'chars'}
                   </span>
                   <button
@@ -1303,9 +1165,9 @@ $$
                         ? 'Guardar diretamente no teu histórico sem gastar tokens de IA'
                         : 'Save directly to your history without AI generation'
                     }
-                    className="px-2.5 py-1 bg-slate-800 hover:bg-slate-700 disabled:opacity-50 border border-slate-700 text-slate-200 hover:text-white rounded text-xs font-mono transition-colors flex items-center space-x-1.5 cursor-pointer"
+                    className="px-2.5 py-1 bg-raised hover:bg-raised-strong disabled:opacity-50 border border-line-strong text-ink hover:text-ink rounded text-xs transition-colors flex items-center space-x-1.5 cursor-pointer"
                   >
-                    {isSavingDirectNote && <RefreshCw className="w-3 h-3 animate-spin text-indigo-400" />}
+                    {isSavingDirectNote && <RefreshCw className="w-3 h-3 animate-spin text-accent-ink" />}
                     <span>{outputLanguage === 'pt' ? 'Guardar Direto (Sem IA)' : 'Save Direct (No AI)'}</span>
                   </button>
                 </div>
@@ -1314,29 +1176,48 @@ $$
 
             {/* Status / Errors */}
             {statusMessage && (
-              <div className="text-xs text-indigo-300 bg-indigo-950/40 border border-indigo-900/50 rounded-lg p-2.5 flex items-center space-x-2">
-                <CheckCircle2 className="w-4 h-4 text-indigo-400 shrink-0" />
+              <div className="text-xs text-accent-ink bg-accent-soft border border-accent-line rounded-lg p-2.5 flex items-center space-x-2">
+                <CheckCircle2 className="w-4 h-4 text-accent-ink shrink-0" />
                 <span>{statusMessage}</span>
               </div>
             )}
 
             {errorMessage && (
-              <div className="text-xs text-rose-300 bg-rose-950/40 border border-rose-900/50 rounded-lg p-2.5 flex items-center space-x-2">
-                <AlertCircle className="w-4 h-4 text-rose-400 shrink-0" />
+              <div className="text-xs text-danger bg-danger-soft border border-danger-line rounded-lg p-2.5 flex items-center space-x-2">
+                <AlertCircle className="w-4 h-4 text-danger shrink-0" />
                 <span>{errorMessage}</span>
               </div>
             )}
+
+            {/* Model */}
+            <div className="flex items-center justify-between gap-3">
+              <label htmlFor="model-preset" className="text-xs font-medium text-ink-soft">
+                {outputLanguage === 'pt' ? 'Modelo' : 'Model'}
+              </label>
+              <select
+                id="model-preset"
+                value={modelPreset}
+                onChange={(e) => setModelPreset(e.target.value)}
+                className="bg-surface border border-line-strong rounded-lg px-2.5 py-1.5 text-xs text-ink focus:outline-none focus:ring-2 focus:ring-accent cursor-pointer"
+              >
+                {AVAILABLE_MODELS.map((m) => (
+                  <option key={m.id} value={m.id}>
+                    {m.label}
+                  </option>
+                ))}
+              </select>
+            </div>
 
             {/* Action Button */}
             <button
               onClick={handleStartPipeline}
               disabled={isProcessing || isCompressing || isAlreadySynthesized}
-              className={`w-full py-3 px-4 rounded-lg font-medium text-sm text-white flex items-center justify-center space-x-2 shadow-sm transition-all ${
+              className={`w-full py-3 px-4 rounded-lg font-medium text-sm text-on-accent flex items-center justify-center space-x-2 transition-all ${
                 isProcessing || isCompressing
-                  ? 'bg-indigo-700/60 cursor-not-allowed'
+                  ? 'bg-brand opacity-60 cursor-not-allowed'
                   : isAlreadySynthesized
-                  ? 'bg-emerald-700/80 cursor-default'
-                  : 'bg-indigo-600 hover:bg-indigo-500 active:scale-[0.99]'
+                  ? 'bg-ok-solid cursor-default'
+                  : 'bg-brand hover:brightness-110 active:scale-[0.99] cursor-pointer'
               }`}
             >
               {isCompressing ? (
@@ -1355,7 +1236,7 @@ $$
                 </>
               ) : isAlreadySynthesized ? (
                 <>
-                  <CheckCircle2 className="w-4 h-4 text-emerald-300" />
+                  <CheckCircle2 className="w-4 h-4" />
                   <span>
                     {outputLanguage === 'pt'
                       ? 'Nota Já Sintetizada para este Material'
@@ -1367,8 +1248,8 @@ $$
                   <Upload className="w-4 h-4" />
                   <span>
                     {outputLanguage === 'pt'
-                      ? `Sintetizar Nota Obsidian (${activeModelName})`
-                      : `Synthesize Obsidian Note (${activeModelName})`}
+                      ? 'Gerar resumo'
+                      : 'Generate summary'}
                   </span>
                 </>
               )}
@@ -1378,24 +1259,24 @@ $$
 
         {/* Right Column: Output / Obsidian View */}
         <section className="lg:col-span-7 flex flex-col">
-          <div className="bg-[#0f172a] border border-slate-800 rounded-xl flex-1 flex flex-col shadow-sm overflow-hidden">
+          <div className="bg-surface border border-line rounded-xl flex-1 flex flex-col shadow-sm overflow-hidden">
             {/* Output Header */}
-            <div className="border-b border-slate-800 bg-[#0d1322] px-5 py-3.5 flex items-center justify-between">
+            <div className="border-b border-line px-5 py-3.5 flex items-center justify-between">
               <div>
-                <h3 className="text-sm font-semibold text-white">
-                  {outputLanguage === 'pt' ? 'Visualização Obsidian (.md)' : 'Obsidian Markdown Output'}
+                <h3 className="text-sm font-semibold text-ink">
+                  {outputLanguage === 'pt' ? 'Resumo' : 'Summary'}
                 </h3>
-                <p className="text-xs text-slate-400">
+                <p className="text-xs text-muted">
                   {outputLanguage === 'pt'
-                    ? 'Nota formatada com YAML, KaTeX LaTeX, Callouts e [[wikilinks]]'
-                    : 'Structured graph note with LaTeX, callouts & wikilinks'}
+                    ? 'Markdown pronto para o Obsidian'
+                    : 'Markdown ready for Obsidian'}
                 </p>
               </div>
 
               {synthesizedMarkdown !== null && (
                 <div className="flex items-center space-x-2">
                   {!viewFormattedNote && (
-                    <span className="text-[10px] font-mono text-slate-500">
+                    <span className="text-xs text-faint">
                       {!activeNoteId
                         ? outputLanguage === 'pt' ? 'Edição local (não guardada)' : 'Local edit (not saved)'
                         : noteSaveStatus === 'saving'
@@ -1414,7 +1295,7 @@ $$
                         ? outputLanguage === 'pt' ? 'Editar o Markdown' : 'Edit the Markdown'
                         : outputLanguage === 'pt' ? 'Ver Markdown formatado' : 'View formatted Markdown'
                     }
-                    className="px-2.5 py-1.5 bg-slate-800 hover:bg-slate-700 text-xs font-medium text-slate-200 rounded-md flex items-center space-x-1.5 transition-colors"
+                    className="px-2.5 py-1.5 bg-raised hover:bg-raised-strong text-xs font-medium text-ink rounded-md flex items-center space-x-1.5 transition-colors"
                   >
                     {viewFormattedNote ? <Pencil className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
                     <span>
@@ -1425,14 +1306,14 @@ $$
                   </button>
                   <button
                     onClick={handleCopyMarkdown}
-                    className="px-2.5 py-1.5 bg-slate-800 hover:bg-slate-700 text-xs font-medium text-slate-200 rounded-md flex items-center space-x-1.5 transition-colors"
+                    className="px-2.5 py-1.5 bg-raised hover:bg-raised-strong text-xs font-medium text-ink rounded-md flex items-center space-x-1.5 transition-colors"
                   >
-                    {copied ? <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5" />}
+                    {copied ? <CheckCircle2 className="w-3.5 h-3.5 text-ok" /> : <Copy className="w-3.5 h-3.5" />}
                     <span>{copied ? (outputLanguage === 'pt' ? 'Copiado!' : 'Copied') : (outputLanguage === 'pt' ? 'Copiar' : 'Copy')}</span>
                   </button>
                   <button
                     onClick={handleDownloadMarkdown}
-                    className="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-500 text-xs font-medium text-white rounded-md flex items-center space-x-1.5 transition-colors shadow-sm"
+                    className="px-3 py-1.5 bg-accent hover:bg-accent-hover text-xs font-medium text-on-accent rounded-md flex items-center space-x-1.5 transition-colors shadow-sm"
                   >
                     <Download className="w-3.5 h-3.5" />
                     <span>{outputLanguage === 'pt' ? 'Descarregar .md' : 'Download .md'}</span>
@@ -1442,7 +1323,7 @@ $$
             </div>
 
             {/* Output Body */}
-            <div className="flex-1 p-5 overflow-auto font-mono text-xs text-slate-300 leading-relaxed bg-[#0b101e]">
+            <div className="flex-1 p-5 overflow-auto text-xs text-ink-soft leading-relaxed">
               {synthesizedMarkdown !== null ? (
                 viewFormattedNote ? (
                   <article className="markdown-body font-sans">
@@ -1454,23 +1335,23 @@ $$
                     onChange={(e) => setSynthesizedMarkdown(e.target.value)}
                     onBlur={handleSaveNoteEdits}
                     spellCheck={false}
-                    className="w-full h-full min-h-150 bg-transparent text-slate-300 font-mono text-xs leading-relaxed resize-none border-0 focus:outline-none whitespace-pre-wrap"
+                    className="w-full h-full min-h-150 bg-transparent text-ink-soft text-xs leading-relaxed resize-none border-0 focus:outline-none whitespace-pre-wrap"
                   />
                 )
               ) : (
-                <div className="h-full min-h-105 flex flex-col items-center justify-center text-center p-6 text-slate-500">
-                  <Cpu className="w-12 h-12 text-slate-700 mb-3 stroke-[1.5]" />
-                  <p className="font-sans text-sm font-medium text-slate-400">
+                <div className="h-full min-h-105 flex flex-col items-center justify-center text-center p-6 text-faint">
+                  <FileText className="w-10 h-10 text-faint mb-3 stroke-[1.5]" />
+                  <p className="font-sans text-sm font-medium text-muted">
                     {outputLanguage === 'pt' ? 'Nenhuma nota gerada ainda' : 'No note synthesized yet'}
                   </p>
-                  <p className="font-sans text-xs text-slate-600 max-w-sm mt-1">
+                  <p className="font-sans text-xs text-faint max-w-sm mt-1">
                     {outputLanguage === 'pt'
                       ? 'Seleciona a cadeira, envia a gravação ou slides e clica em sintetizar para gerar a nota estruturada.'
                       : 'Select a course, upload the lecture recording or slides, and initiate synthesis to view the structured Obsidian graph note.'}
                   </p>
                   <button
                     onClick={handleLoadSample}
-                    className="mt-4 px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-xs font-medium text-slate-300 rounded-lg transition-colors border border-slate-700 hover:text-white"
+                    className="mt-4 px-3 py-1.5 bg-raised hover:bg-raised-strong text-xs font-medium text-ink-soft rounded-lg transition-colors border border-line-strong hover:text-ink"
                   >
                     {outputLanguage === 'pt' ? 'Carregar Exemplo de Nota (.md)' : 'Load Sample Note Preview'}
                   </button>
@@ -1485,14 +1366,14 @@ $$
       {/* Modal: Create Custom Course */}
       {isCreatingCourse && (
         <div className="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="bg-[#0f172a] border border-slate-800 rounded-xl p-6 max-w-md w-full shadow-2xl space-y-4">
-            <div className="flex items-center justify-between border-b border-slate-800 pb-3">
-              <h3 className="text-sm font-bold text-white">
+          <div className="bg-surface border border-line rounded-xl p-6 max-w-md w-full shadow-2xl space-y-4">
+            <div className="flex items-center justify-between border-b border-line pb-3">
+              <h3 className="text-sm font-bold text-ink">
                 {outputLanguage === 'pt' ? 'Adicionar Nova Cadeira' : 'Create New Academic Course'}
               </h3>
               <button
                 onClick={() => setIsCreatingCourse(false)}
-                className="text-slate-400 hover:text-white transition-colors"
+                className="text-muted hover:text-ink transition-colors"
               >
                 <X className="w-4 h-4" />
               </button>
@@ -1500,7 +1381,7 @@ $$
 
             <form onSubmit={handleCreateCourse} className="space-y-4">
               <div>
-                <label className="block text-xs font-medium text-slate-300 mb-1">
+                <label className="block text-xs font-medium text-ink-soft mb-1">
                   {outputLanguage === 'pt' ? 'Nome da Cadeira' : 'Course Name'}
                 </label>
                 <input
@@ -1508,13 +1389,13 @@ $$
                   placeholder={outputLanguage === 'pt' ? 'ex: Arquitetura de Computadores' : 'e.g. Computer Architecture'}
                   value={newCourseName}
                   onChange={(e) => setNewCourseName(e.target.value)}
-                  className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                  className="w-full bg-surface border border-line-strong rounded-lg px-3 py-2 text-sm text-ink focus:outline-none focus:ring-2 focus:ring-accent"
                   required
                 />
               </div>
 
               <div>
-                <label className="block text-xs font-medium text-slate-300 mb-1">
+                <label className="block text-xs font-medium text-ink-soft mb-1">
                   {outputLanguage === 'pt' ? 'Sigla / Código' : 'Course Code'}
                 </label>
                 <input
@@ -1522,7 +1403,7 @@ $$
                   placeholder={outputLanguage === 'pt' ? 'ex: AC' : 'e.g. CA'}
                   value={newCourseCode}
                   onChange={(e) => setNewCourseCode(e.target.value)}
-                  className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:ring-2 focus:ring-indigo-500 uppercase"
+                  className="w-full bg-surface border border-line-strong rounded-lg px-3 py-2 text-sm text-ink focus:outline-none focus:ring-2 focus:ring-accent"
                   required
                 />
               </div>
@@ -1531,13 +1412,13 @@ $$
                 <button
                   type="button"
                   onClick={() => setIsCreatingCourse(false)}
-                  className="px-3 py-2 text-xs text-slate-400 hover:text-white transition-colors"
+                  className="px-3 py-2 text-xs text-muted hover:text-ink transition-colors"
                 >
                   {outputLanguage === 'pt' ? 'Cancelar' : 'Cancel'}
                 </button>
                 <button
                   type="submit"
-                  className="px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-xs font-medium text-white rounded-lg transition-colors"
+                  className="px-4 py-2 bg-accent hover:bg-accent-hover text-xs font-medium text-on-accent rounded-lg transition-colors"
                 >
                   {outputLanguage === 'pt' ? 'Salvar Cadeira' : 'Save Course'}
                 </button>
@@ -1554,42 +1435,42 @@ $$
             onClick={() => setShowHistoryDrawer(false)}
           />
           <div className="fixed inset-y-0 right-0 max-w-full flex pl-10">
-            <div className="w-screen max-w-md bg-slate-900 border-l border-slate-800 p-6 flex flex-col space-y-4 shadow-2xl">
+            <div className="w-screen max-w-md bg-surface border-l border-line p-6 flex flex-col space-y-4 shadow-2xl">
               {/* Drawer Header */}
-              <div className="flex items-center justify-between pb-3 border-b border-slate-800">
+              <div className="flex items-center justify-between pb-3 border-b border-line">
                 <div className="flex items-center space-x-2">
-                  <History className="w-5 h-5 text-indigo-400" />
-                  <h3 className="text-base font-bold text-white">Meu Histórico</h3>
-                  <span className="text-xs px-2 py-0.5 rounded-full bg-indigo-950 text-indigo-300 font-mono font-bold">
+                  <History className="w-5 h-5 text-accent-ink" />
+                  <h3 className="text-base font-bold text-ink">Meu Histórico</h3>
+                  <span className="text-xs px-2 py-0.5 rounded-full bg-accent-soft text-accent-ink font-bold">
                     {personalNotes.length} notas
                   </span>
-                  <span className="text-xs px-2 py-0.5 rounded-full bg-slate-800 text-slate-400 font-mono">
+                  <span className="text-xs px-2 py-0.5 rounded-full bg-raised text-muted">
                     {groupedPersonalNotes.length} cadeiras
                   </span>
                 </div>
                 <button
                   onClick={() => setShowHistoryDrawer(false)}
-                  className="text-slate-400 hover:text-white transition-colors cursor-pointer text-sm p-1 rounded hover:bg-slate-800"
+                  className="text-muted hover:text-ink transition-colors cursor-pointer text-sm p-1 rounded hover:bg-raised"
                 >
                   ✕
                 </button>
               </div>
 
-              <p className="text-xs text-slate-400 font-mono leading-relaxed">
+              <p className="text-xs text-muted leading-relaxed">
                 Notas organizadas por cadeira curricular. Podes copiar ou descarregar diretamente sem abrir no editor.
               </p>
 
               {/* Drawer Content */}
-              <div className="flex-1 overflow-y-auto space-y-3 pr-1 font-mono text-xs">
+              <div className="flex-1 overflow-y-auto space-y-3 pr-1 text-xs">
                 {loadingHistory ? (
                   <div className="space-y-3 animate-pulse">
                     {[1, 2, 3].map((i) => (
-                      <div key={i} className="h-20 bg-slate-950 rounded-xl" />
+                      <div key={i} className="h-20 bg-canvas rounded-xl" />
                     ))}
                   </div>
                 ) : personalNotes.length === 0 ? (
-                  <div className="text-center py-16 space-y-2 text-slate-500 font-mono">
-                    <Folder className="w-8 h-8 mx-auto text-slate-600" />
+                  <div className="text-center py-16 space-y-2 text-faint">
+                    <Folder className="w-8 h-8 mx-auto text-faint" />
                     <p>Ainda não sintetizaste nenhuma nota.</p>
                   </div>
                 ) : (
@@ -1603,45 +1484,45 @@ $$
                     return (
                       <div
                         key={courseCode}
-                        className="bg-slate-950/80 border border-slate-800 rounded-xl overflow-hidden transition-colors"
+                        className="bg-canvas border border-line rounded-xl overflow-hidden transition-colors"
                       >
                         {/* Course Folder Header (Accordion) */}
                         <button
                           onClick={() => toggleCourseFolder(courseCode)}
-                          className="w-full flex items-center justify-between p-3 bg-slate-900/60 hover:bg-slate-900 text-left transition-colors cursor-pointer"
+                          className="w-full flex items-center justify-between p-3 bg-surface hover:bg-surface text-left transition-colors cursor-pointer"
                         >
                           <div className="flex items-center space-x-2 truncate pr-2">
                             {isExpanded ? (
-                              <ChevronDown className="w-3.5 h-3.5 text-indigo-400 shrink-0" />
+                              <ChevronDown className="w-3.5 h-3.5 text-accent-ink shrink-0" />
                             ) : (
-                              <ChevronRight className="w-3.5 h-3.5 text-slate-500 shrink-0" />
+                              <ChevronRight className="w-3.5 h-3.5 text-faint shrink-0" />
                             )}
                             {isExpanded ? (
-                              <FolderOpen className="w-4 h-4 text-amber-400 shrink-0" />
+                              <FolderOpen className="w-4 h-4 text-warn shrink-0" />
                             ) : (
-                              <Folder className="w-4 h-4 text-amber-500/80 shrink-0" />
+                              <Folder className="w-4 h-4 text-warn shrink-0" />
                             )}
-                            <span className="font-bold text-white text-xs">{courseCode}</span>
-                            <span className="text-slate-400 text-xs truncate max-w-42.5">
+                            <span className="font-bold text-ink text-xs">{courseCode}</span>
+                            <span className="text-muted text-xs truncate max-w-42.5">
                               - {courseDisplayName}
                             </span>
                           </div>
 
-                          <span className="px-1.5 py-0.2 rounded-full text-[10px] font-bold bg-indigo-950 text-indigo-300 border border-indigo-800/60 shrink-0">
+                          <span className="px-1.5 py-0.2 rounded-full text-xs font-bold bg-accent-soft text-accent-ink border border-accent-line shrink-0">
                             {courseNotes.length}
                           </span>
                         </button>
 
                         {/* Notes List inside Course Folder */}
                         {isExpanded && (
-                          <div className="p-2 space-y-2 border-t border-slate-800/60">
+                          <div className="p-2 space-y-2 border-t border-line">
                             {courseNotes.map((note) => {
                               const isCopied = copiedNoteId === note.id;
 
                               return (
                                 <div
                                   key={note.id}
-                                  className="bg-slate-900/80 hover:bg-slate-900 border border-slate-800/80 hover:border-slate-700 rounded-lg p-2.5 space-y-1.5 transition-colors"
+                                  className="bg-surface hover:bg-surface border border-line hover:border-line-strong rounded-lg p-2.5 space-y-1.5 transition-colors"
                                 >
                                   {editingNoteId === note.id ? (
                                     <div className="flex items-center gap-1.5 py-0.5">
@@ -1656,13 +1537,13 @@ $$
                                         autoFocus
                                         disabled={isSavingTitle}
                                         placeholder={outputLanguage === 'pt' ? 'Nome da nota...' : 'Note title...'}
-                                        className="w-full bg-slate-950 border border-indigo-500 rounded px-2 py-1 text-xs text-white focus:outline-none focus:ring-1 focus:ring-indigo-400"
+                                        className="w-full bg-canvas border border-accent rounded px-2 py-1 text-xs text-ink focus:outline-none focus:ring-1 focus:ring-accent"
                                       />
                                       <button
                                         onClick={() => handleSaveNoteTitle(note.id)}
                                         disabled={isSavingTitle || !editingTitle.trim()}
                                         title={outputLanguage === 'pt' ? 'Guardar' : 'Save'}
-                                        className="p-1 bg-emerald-600 hover:bg-emerald-500 text-white rounded transition-colors cursor-pointer shrink-0 disabled:opacity-50"
+                                        className="p-1 bg-ok-solid hover:bg-ok-solid-hover text-on-accent rounded transition-colors cursor-pointer shrink-0 disabled:opacity-50"
                                       >
                                         <Check className="w-3.5 h-3.5" />
                                       </button>
@@ -1670,22 +1551,22 @@ $$
                                         onClick={() => setEditingNoteId(null)}
                                         disabled={isSavingTitle}
                                         title={outputLanguage === 'pt' ? 'Cancelar' : 'Cancel'}
-                                        className="p-1 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded transition-colors cursor-pointer shrink-0"
+                                        className="p-1 bg-raised hover:bg-raised-strong text-ink-soft rounded transition-colors cursor-pointer shrink-0"
                                       >
                                         <X className="w-3.5 h-3.5" />
                                       </button>
                                     </div>
                                   ) : (
                                     <h4
-                                      className="text-xs font-bold text-white leading-snug wrap-break-word"
+                                      className="text-xs font-bold text-ink leading-snug wrap-break-word"
                                       title={note.title}
                                     >
                                       {note.title}
                                     </h4>
                                   )}
 
-                                  <div className="flex items-center justify-between pt-1 border-t border-slate-800/40 gap-2">
-                                    <div className="text-[10px] text-slate-500 flex items-center space-x-1.5 truncate">
+                                  <div className="flex items-center justify-between pt-1 border-t border-line gap-2">
+                                    <div className="text-xs text-faint flex items-center space-x-1.5 truncate">
                                       <span>
                                         {new Date(note.lecture_date || note.created_at).toLocaleDateString('pt-PT')}
                                       </span>
@@ -1702,7 +1583,7 @@ $$
                                             setEditingTitle(note.title);
                                           }}
                                           title={outputLanguage === 'pt' ? 'Mudar nome da nota' : 'Rename note'}
-                                          className="p-1.5 bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-white rounded transition-colors cursor-pointer"
+                                          className="p-1.5 bg-raised hover:bg-raised-strong text-muted hover:text-ink rounded transition-colors cursor-pointer"
                                         >
                                           <Pencil className="w-3.5 h-3.5" />
                                         </button>
@@ -1711,10 +1592,10 @@ $$
                                         <button
                                           onClick={() => handleCopyNoteDirect(note)}
                                           title={isCopied ? 'Copiado!' : 'Copiar Markdown'}
-                                          className="p-1.5 bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white rounded transition-colors cursor-pointer"
+                                          className="p-1.5 bg-raised hover:bg-raised-strong text-ink-soft hover:text-ink rounded transition-colors cursor-pointer"
                                         >
                                           {isCopied ? (
-                                            <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />
+                                            <CheckCircle2 className="w-3.5 h-3.5 text-ok" />
                                           ) : (
                                             <Copy className="w-3.5 h-3.5" />
                                           )}
@@ -1724,7 +1605,7 @@ $$
                                         <button
                                           onClick={() => handleDownloadNoteDirect(note)}
                                           title="Descarregar .md (Obsidian)"
-                                          className="p-1.5 bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white rounded transition-colors cursor-pointer"
+                                          className="p-1.5 bg-raised hover:bg-raised-strong text-ink-soft hover:text-ink rounded transition-colors cursor-pointer"
                                         >
                                           <Download className="w-3.5 h-3.5" />
                                         </button>
@@ -1737,7 +1618,7 @@ $$
                                             setShowHistoryDrawer(false);
                                           }}
                                           title="Abrir no Studio"
-                                          className="p-1.5 bg-indigo-950/80 hover:bg-indigo-900 text-indigo-300 hover:text-white rounded transition-colors cursor-pointer border border-indigo-800/40"
+                                          className="p-1.5 bg-accent-soft hover:bg-accent-soft text-accent-ink hover:text-ink rounded transition-colors cursor-pointer border border-accent-line"
                                         >
                                           <Eye className="w-3.5 h-3.5" />
                                         </button>
@@ -1746,7 +1627,7 @@ $$
                                         <button
                                           onClick={() => handleDeleteNoteDirect(note.id)}
                                           title={outputLanguage === 'pt' ? 'Apagar nota permanentemente' : 'Delete note permanently'}
-                                          className="p-1.5 bg-slate-800 hover:bg-rose-950/70 text-slate-400 hover:text-rose-400 rounded transition-colors cursor-pointer border border-transparent hover:border-rose-800/50"
+                                          className="p-1.5 bg-raised hover:bg-danger-soft text-muted hover:text-danger rounded transition-colors cursor-pointer border border-transparent hover:border-danger-line"
                                         >
                                           <Trash2 className="w-3.5 h-3.5" />
                                         </button>

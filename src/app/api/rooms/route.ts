@@ -55,7 +55,7 @@ export async function POST(req: Request) {
     });
 
     if (result.error || !result.room) {
-      return NextResponse.json({ error: result.error || 'Failed to create room.' }, { status: 500 });
+      return NextResponse.json({ error: result.error || 'Failed to create room.' }, { status: result.status || 500 });
     }
 
     return NextResponse.json({ success: true, room: result.room });

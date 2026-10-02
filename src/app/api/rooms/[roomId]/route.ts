@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { enforceAuthGuard } from '@/lib/auth/guard';
-import { getRoomDetails, updateRoomName } from '@/lib/db/rooms';
+import { getRoomDetails, updateRoomName, deleteStudyRoom } from '@/lib/db/rooms';
 
 export const dynamic = 'force-dynamic';
 
@@ -78,3 +78,33 @@ export async function PATCH(
   }
 }
 
+export async function DELETE(
+  req: Request,
+  context: { params: Promise<{ roomId: string }> }
+) {
+  try {
+    const auth = await enforceAuthGuard();
+    if (!auth.authorized && auth.response) {
+      return auth.response;
+    }
+
+    if (!auth.email) {
+      return NextResponse.json({ error: 'Authentication required.' }, { status: 401 });
+    }
+
+    const { roomId } = await context.params;
+    if (!roomId) {
+      return NextResponse.json({ error: 'Room ID required.' }, { status: 400 });
+    }
+
+    const res = await deleteStudyRoom(roomId, auth.email);
+    if (!res.success) {
+      return NextResponse.json({ error: res.error }, { status: res.status || 500 });
+    }
+
+    return NextResponse.json({ success: true });
+  } catch (err) {
+    const message = err instanceof Error ? err.message : 'Falha ao eliminar sala.';
+    return NextResponse.json({ error: message }, { status: 500 });
+  }
+}

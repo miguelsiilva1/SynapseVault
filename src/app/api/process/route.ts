@@ -5,12 +5,20 @@ import { extractPdfText } from '@/lib/pdf/extractText';
 import { synthesizeObsidianNote } from '@/lib/ai/gemini';
 import { enforceAuthGuard } from '@/lib/auth/guard';
 import { persistNoteToDatabase } from '@/lib/db/notes';
+import { enforceAiQuota } from '@/lib/auth/aiQuota';
+import { ALLOWED_MODELS, MAX_SOURCE_TEXT_CHARS, exceedsLength } from '@/lib/limits';
 
 export const maxDuration = 120; // Allow 2-minute server execution for large academic jobs
 
 export async function POST(req: Request) {
   let activeAudioKey: string | undefined;
   let activePdfKey: string | undefined;
+
+  const purgeUploads = () =>
+    Promise.allSettled([
+      activeAudioKey ? deleteFileFromR2(activeAudioKey) : Promise.resolve(),
+      activePdfKey ? deleteFileFromR2(activePdfKey) : Promise.resolve(),
+    ]);
 
   try {
     const auth = await enforceAuthGuard();
@@ -59,6 +67,25 @@ export async function POST(req: Request) {
       );
     }
 
+    if (modelName !== undefined && !ALLOWED_MODELS.includes(modelName)) {
+      await purgeUploads();
+      return NextResponse.json({ error: 'Unsupported model.' }, { status: 400 });
+    }
+
+    if (exceedsLength(rawMarkdown, MAX_SOURCE_TEXT_CHARS)) {
+      await purgeUploads();
+      return NextResponse.json(
+        { error: `rawMarkdown exceeds the limit of ${MAX_SOURCE_TEXT_CHARS} characters.` },
+        { status: 413 }
+      );
+    }
+
+    const quotaResponse = await enforceAiQuota(auth.email);
+    if (quotaResponse) {
+      await purgeUploads();
+      return quotaResponse;
+    }
+
     // Step 1: Execute speech transcription and PDF parsing in parallel
     const [audioSettled, pdfSettled] = await Promise.allSettled([
       (async () => {
@@ -76,10 +103,7 @@ export async function POST(req: Request) {
     ]);
 
     // Step 2: Auto-purge raw binaries from Cloudflare R2 immediately to enforce 0 MB persistent storage
-    await Promise.allSettled([
-      activeAudioKey ? deleteFileFromR2(activeAudioKey) : Promise.resolve(),
-      activePdfKey ? deleteFileFromR2(activePdfKey) : Promise.resolve(),
-    ]);
+    await purgeUploads();
 
     const warnings: string[] = [];
 
@@ -111,6 +135,11 @@ export async function POST(req: Request) {
     const pdfResult = pdfSettled.status === 'fulfilled'
       ? pdfSettled.value
       : { text: '', totalPages: 0 };
+
+    if (pdfResult.text.length > MAX_SOURCE_TEXT_CHARS) {
+      pdfResult.text = pdfResult.text.slice(0, MAX_SOURCE_TEXT_CHARS);
+      warnings.push(`PDF text was truncated to ${MAX_SOURCE_TEXT_CHARS} characters.`);
+    }
 
     // Step 3: Combine slides text with any provided raw markdown summaries
     const combinedReferenceText = [
@@ -170,12 +199,7 @@ export async function POST(req: Request) {
     });
   } catch (error) {
     // Ensure cleanup even on pipeline error
-    if (activeAudioKey || activePdfKey) {
-      await Promise.allSettled([
-        activeAudioKey ? deleteFileFromR2(activeAudioKey) : Promise.resolve(),
-        activePdfKey ? deleteFileFromR2(activePdfKey) : Promise.resolve(),
-      ]);
-    }
+    await purgeUploads();
 
     const message = error instanceof Error ? error.message : 'Pipeline orchestration failed.';
     return NextResponse.json({ error: message }, { status: 500 });

@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { generatePresignedUploadUrl, buildUserUploadKey } from '@/lib/storage/r2';
 import { enforceAuthGuard } from '@/lib/auth/guard';
+import { MAX_UPLOAD_BYTES } from '@/lib/limits';
 
 const ALLOWED_MIME_TYPES = new Set([
   'audio/mp3',
@@ -12,8 +13,6 @@ const ALLOWED_MIME_TYPES = new Set([
   'audio/ogg',
   'application/pdf',
 ]);
-
-const MAX_DECLARED_SIZE_BYTES = 100 * 1024 * 1024; // 100 MB max threshold
 
 export async function POST(req: Request) {
   try {
@@ -39,9 +38,9 @@ export async function POST(req: Request) {
       );
     }
 
-    if (fileSize && fileSize > MAX_DECLARED_SIZE_BYTES) {
+    if (fileSize && fileSize > MAX_UPLOAD_BYTES) {
       return NextResponse.json(
-        { error: 'File size exceeds maximum threshold of 100MB.' },
+        { error: 'File size exceeds maximum threshold of 25MB.' },
         { status: 413 }
       );
     }

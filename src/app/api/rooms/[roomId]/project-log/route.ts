@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { enforceAuthGuard } from '@/lib/auth/guard';
 import { getProjectLog, saveProjectLog, appendProjectLogEntry, verifyRoomFolderAccess } from '@/lib/db/rooms';
+import { MAX_NOTE_MARKDOWN_CHARS, exceedsLength } from '@/lib/limits';
 
 export const dynamic = 'force-dynamic';
 
@@ -66,6 +67,13 @@ export async function POST(
 
     if (!folderId) {
       return NextResponse.json({ error: 'Folder ID obrigatório.' }, { status: 400 });
+    }
+
+    if (exceedsLength(message, MAX_NOTE_MARKDOWN_CHARS) || exceedsLength(contentMarkdown, MAX_NOTE_MARKDOWN_CHARS)) {
+      return NextResponse.json(
+        { error: `O texto excede o limite de ${MAX_NOTE_MARKDOWN_CHARS} caracteres.` },
+        { status: 413 }
+      );
     }
 
     const access = await verifyRoomFolderAccess({ roomId, folderId, userEmail: auth.email });

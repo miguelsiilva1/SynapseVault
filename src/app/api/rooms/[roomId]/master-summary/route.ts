@@ -8,6 +8,8 @@ import {
   getRoomDetails,
 } from '@/lib/db/rooms';
 import { regenerateMasterSummaryFull } from '@/lib/ai/masterSynthesis';
+import { enforceAiQuota } from '@/lib/auth/aiQuota';
+import { MAX_NOTE_MARKDOWN_CHARS } from '@/lib/limits';
 
 export const maxDuration = 120;
 
@@ -94,6 +96,9 @@ export async function POST(
     const courseCode = targetFolder.course_code || 'GERAL';
     const courseName = targetFolder.name.replace(/\(.*?\)/g, '').trim() || courseCode;
 
+    const quotaResponse = await enforceAiQuota(auth.email);
+    if (quotaResponse) return quotaResponse;
+
     const synthesis = await regenerateMasterSummaryFull({
       courseName,
       courseCode,
@@ -145,6 +150,13 @@ export async function PATCH(
       return NextResponse.json(
         { error: 'folderId and contentMarkdown are required.' },
         { status: 400 }
+      );
+    }
+
+    if (contentMarkdown.length > MAX_NOTE_MARKDOWN_CHARS) {
+      return NextResponse.json(
+        { error: `contentMarkdown exceeds the limit of ${MAX_NOTE_MARKDOWN_CHARS} characters.` },
+        { status: 413 }
       );
     }
 

@@ -10,6 +10,8 @@ import {
   type RoomFolderRecord,
 } from '@/lib/db/rooms';
 import { updateMasterSummaryIncremental, detectWeekFromTitle } from '@/lib/ai/masterSynthesis';
+import { enforceAiQuota } from '@/lib/auth/aiQuota';
+import { MAX_NOTE_MARKDOWN_CHARS } from '@/lib/limits';
 
 export const maxDuration = 120; // 2-minute timeout for incremental synthesis
 
@@ -39,10 +41,17 @@ export async function POST(
       outputLanguage,
     } = body;
 
-    if (!folderId || !title || !contentMarkdown) {
+    if (!folderId || typeof title !== 'string' || !title || typeof contentMarkdown !== 'string' || !contentMarkdown) {
       return NextResponse.json(
         { error: 'folderId, title, and contentMarkdown are required.' },
         { status: 400 }
+      );
+    }
+
+    if (contentMarkdown.length > MAX_NOTE_MARKDOWN_CHARS) {
+      return NextResponse.json(
+        { error: `contentMarkdown exceeds the limit of ${MAX_NOTE_MARKDOWN_CHARS} characters.` },
+        { status: 413 }
       );
     }
 
@@ -96,8 +105,9 @@ export async function POST(
 
     let updatedSummaryResult = null;
 
-    // 4. Incrementally update the Master Summary for this specific folder
-    if (triggerMasterUpdate) {
+    // 4. Incrementally update the Master Summary for this specific folder.
+    // The note import itself is not blocked when the daily AI cap is reached.
+    if (triggerMasterUpdate && !(await enforceAiQuota(auth.email))) {
       try {
         const existingSummaryRes = await getFolderMasterSummary(finalFolderId);
         const currentMasterSummary = existingSummaryRes.summary?.content_markdown || '';

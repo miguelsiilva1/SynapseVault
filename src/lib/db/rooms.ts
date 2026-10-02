@@ -138,7 +138,7 @@ export async function createStudyRoom(params: {
   description?: string;
   ownerEmail: string;
   initialMemberEmails: string[];
-}): Promise<{ room?: StudyRoomRecord; error?: string }> {
+}): Promise<{ room?: StudyRoomRecord; error?: string; status?: number }> {
   try {
     const supabase = createAdminSupabaseClient() || (await createServerSupabaseClient());
     if (!supabase) return { error: 'Database unconfigured.' };
@@ -151,7 +151,7 @@ export async function createStudyRoom(params: {
       .filter(Boolean);
     const invalidEmail = invited.find((e) => !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(e));
     if (invalidEmail) {
-      return { error: `Email inválido: ${invalidEmail}` };
+      return { error: `Email inválido: ${invalidEmail}`, status: 400 };
     }
 
     const slugBase = params.name
@@ -597,6 +597,46 @@ export async function updateRoomName(
   } catch (err) {
     console.warn('[Supabase DB] Error in updateRoomName:', err);
     return { success: false, error: 'Failed to update room name.' };
+  }
+}
+
+/**
+ * Deletes a study room and everything in it (members, folders, notes, summaries and
+ * logs cascade) if the requesting user is the room owner.
+ */
+export async function deleteStudyRoom(
+  roomId: string,
+  userEmail: string
+): Promise<{ success: boolean; error?: string; status?: number }> {
+  try {
+    const supabase = createAdminSupabaseClient();
+    if (!supabase) return { success: false, error: 'Database unconfigured.', status: 500 };
+
+    const email = userEmail.trim().toLowerCase();
+
+    // Verify ownership
+    const { data: memberCheck } = await supabase
+      .from('room_members')
+      .select('role')
+      .eq('room_id', roomId)
+      .eq('user_email', email)
+      .maybeSingle();
+
+    if (!memberCheck || memberCheck.role !== 'owner') {
+      return { success: false, error: 'Apenas o criador da sala tem permissão para a eliminar.', status: 403 };
+    }
+
+    const { error } = await supabase.from('study_rooms').delete().eq('id', roomId);
+
+    if (error) {
+      console.warn('[Supabase DB] Failed to delete room:', error.message);
+      return { success: false, error: error.message, status: 500 };
+    }
+
+    return { success: true };
+  } catch (err) {
+    console.warn('[Supabase DB] Error in deleteStudyRoom:', err);
+    return { success: false, error: 'Failed to delete study room.', status: 500 };
   }
 }
 

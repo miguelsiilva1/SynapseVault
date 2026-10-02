@@ -1,5 +1,6 @@
-import { S3Client, PutObjectCommand, GetObjectCommand, DeleteObjectCommand } from '@aws-sdk/client-s3';
+import { S3Client, PutObjectCommand, GetObjectCommand, HeadObjectCommand, DeleteObjectCommand } from '@aws-sdk/client-s3';
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
+import { MAX_UPLOAD_BYTES } from '@/lib/limits';
 
 const accountId = process.env.CLOUDFLARE_ACCOUNT_ID;
 const accessKeyId = process.env.R2_ACCESS_KEY_ID;
@@ -91,6 +92,16 @@ export async function uploadBufferToR2(
  */
 export async function downloadFileAsBuffer(key: string): Promise<ArrayBuffer> {
   const client = getR2Client();
+
+  // A presigned PUT cannot enforce a size, so check before loading the object into memory
+  const head = await client
+    .send(new HeadObjectCommand({ Bucket: bucketName, Key: key }))
+    .catch(() => {
+      throw new Error('Uploaded file not found. Upload it again.');
+    });
+  if ((head.ContentLength ?? 0) > MAX_UPLOAD_BYTES) {
+    throw new Error('File exceeds the 25MB limit.');
+  }
 
   const command = new GetObjectCommand({
     Bucket: bucketName,

@@ -84,6 +84,23 @@ create table if not exists public.room_project_logs (
   updated_by_email text
 );
 
+-- Access whitelist, mirrored from AUTHORIZED_EMAILS / AUTHORIZED_DOMAINS.
+-- One row per email ('friend@example.com') or per domain ('@alunos.example.pt'), lower case.
+-- Add your own email BEFORE applying the restrictive policies below, or every
+-- signed-in user (you included) loses access through the user-scoped client:
+--   insert into public.allowed_emails (email) values ('you@example.com') on conflict do nothing;
+create table if not exists public.allowed_emails (
+  email text primary key check (email = lower(email)),
+  created_at timestamptz not null default now()
+);
+
+-- One row per AI generation, used for the per-user daily cap
+create table if not exists public.ai_usage (
+  id uuid primary key default gen_random_uuid(),
+  user_email text not null,
+  created_at timestamptz not null default now()
+);
+
 -- Upgrade path for databases created before guidelines_markdown existed
 alter table public.room_project_logs add column if not exists guidelines_markdown text;
 
@@ -100,6 +117,7 @@ create index if not exists idx_room_folders_parent on public.room_folders(parent
 create index if not exists idx_room_notes_folder on public.room_notes(folder_id);
 create index if not exists idx_room_notes_room on public.room_notes(room_id);
 create index if not exists idx_room_master_folder on public.room_master_summaries(folder_id);
+create index if not exists idx_ai_usage_user_created on public.ai_usage(user_email, created_at desc);
 
 -- Triggers
 create or replace function public.handle_updated_at()
@@ -125,6 +143,43 @@ alter table public.room_folders enable row level security;
 alter table public.room_notes enable row level security;
 alter table public.room_master_summaries enable row level security;
 alter table public.room_project_logs enable row level security;
+
+-- No policies on these two: only the service role (which bypasses RLS) can read or write them
+alter table public.allowed_emails enable row level security;
+alter table public.ai_usage enable row level security;
+
+-- Whitelist gate. Restrictive policies are ANDed with the permissive policies below,
+-- so a signed-in user who is not in allowed_emails can read and write nothing.
+create or replace function public.is_whitelisted()
+returns boolean
+language sql
+stable
+security definer
+set search_path = public
+as $$
+  select exists (
+    select 1 from public.allowed_emails
+    where email = lower(auth.jwt() ->> 'email')
+       or email = '@' || split_part(lower(auth.jwt() ->> 'email'), '@', 2)
+  );
+$$;
+
+do $$
+declare
+  t text;
+begin
+  foreach t in array array[
+    'courses', 'notes', 'study_rooms', 'room_members',
+    'room_folders', 'room_notes', 'room_master_summaries', 'room_project_logs'
+  ] loop
+    execute format('drop policy if exists "Whitelisted users only" on public.%I', t);
+    execute format(
+      'create policy "Whitelisted users only" on public.%I as restrictive for all to authenticated '
+      || 'using (public.is_whitelisted()) with check (public.is_whitelisted())',
+      t
+    );
+  end loop;
+end $$;
 
 -- Policies: Courses
 drop policy if exists "Authenticated users can view courses" on public.courses;

@@ -2,6 +2,8 @@ import { NextResponse } from 'next/server';
 import { enforceAuthGuard } from '@/lib/auth/guard';
 import { generateCourseSyllabusSynthesis } from '@/lib/ai/masterSynthesis';
 import { saveFolderMasterSummary, getRoomDetails } from '@/lib/db/rooms';
+import { enforceAiQuota } from '@/lib/auth/aiQuota';
+import { MAX_SOURCE_TEXT_CHARS } from '@/lib/limits';
 
 export const dynamic = 'force-dynamic';
 
@@ -27,10 +29,17 @@ export async function POST(
     const body = await req.json();
     const { folderId, sourceText, outputLanguage } = body;
 
-    if (!folderId || !sourceText || !sourceText.trim()) {
+    if (!folderId || typeof sourceText !== 'string' || !sourceText.trim()) {
       return NextResponse.json(
         { error: 'folderId e sourceText são obrigatórios.' },
         { status: 400 }
+      );
+    }
+
+    if (sourceText.length > MAX_SOURCE_TEXT_CHARS) {
+      return NextResponse.json(
+        { error: `sourceText excede o limite de ${MAX_SOURCE_TEXT_CHARS} caracteres.` },
+        { status: 413 }
       );
     }
 
@@ -55,6 +64,9 @@ export async function POST(
         courseName = parent.name.replace(/\(.*?\)/g, '').trim() || parent.name;
       }
     }
+
+    const quotaResponse = await enforceAiQuota(auth.email);
+    if (quotaResponse) return quotaResponse;
 
     const synthesis = await generateCourseSyllabusSynthesis({
       courseName,

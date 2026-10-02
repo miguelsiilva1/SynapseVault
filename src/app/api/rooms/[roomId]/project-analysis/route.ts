@@ -2,6 +2,8 @@ import { NextResponse } from 'next/server';
 import { enforceAuthGuard } from '@/lib/auth/guard';
 import { generateProjectGuidelinesSynthesis } from '@/lib/ai/masterSynthesis';
 import { saveProjectGuidelines, getProjectLog, getRoomDetails, verifyRoomFolderAccess } from '@/lib/db/rooms';
+import { enforceAiQuota } from '@/lib/auth/aiQuota';
+import { MAX_SOURCE_TEXT_CHARS } from '@/lib/limits';
 
 export const dynamic = 'force-dynamic';
 
@@ -65,6 +67,13 @@ export async function POST(
       return NextResponse.json({ error: 'folderId e sourceText são obrigatórios.' }, { status: 400 });
     }
 
+    if (sourceText.length > MAX_SOURCE_TEXT_CHARS) {
+      return NextResponse.json(
+        { error: `sourceText excede o limite de ${MAX_SOURCE_TEXT_CHARS} caracteres.` },
+        { status: 413 }
+      );
+    }
+
     // Verify room access
     const details = await getRoomDetails(roomId, auth.email);
     if (details.error) {
@@ -77,6 +86,9 @@ export async function POST(
     }
     const resolvedName = projectName || folder.name || 'Projeto';
     const resolvedCode = courseCode || folder.course_code || '';
+
+    const quotaResponse = await enforceAiQuota(auth.email);
+    if (quotaResponse) return quotaResponse;
 
     const synthesis = await generateProjectGuidelinesSynthesis({
       projectName: resolvedName,

@@ -1,3 +1,9 @@
 {
-  "tailwindCSS.lint.cssConflict": "ignore"
+  "css.lint.unknownAtRules": "ignore",
+  "scss.lint.unknownAtRules": "ignore",
+  "less.lint.unknownAtRules": "ignore",
+  "tailwindCSS.lint.cssConflict": "ignore",
+  "files.associations": {
+    "*.css": "tailwindcss"
+  }
 }

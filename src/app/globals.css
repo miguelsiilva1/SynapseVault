@@ -1,6 +1,6 @@
 @import "tailwindcss";
-@plugin "@tailwindcss/typography";
 @import "katex/dist/katex.min.css";
+@plugin "@tailwindcss/typography";
 
 :root {
   --background: #ffffff;

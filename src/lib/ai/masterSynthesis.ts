@@ -1,4 +1,5 @@
 import { GoogleGenAI } from '@google/genai';
+import { NOTE_VISUAL_STYLE } from './noteStyle';
 
 export interface IncrementalMasterSynthesisParams {
   courseName: string;
@@ -76,7 +77,7 @@ Inclui:
 - Conceitos Chave e Fórmulas/Definições
 - Questões de Exame e Casos Práticos`
 }
-
+${NOTE_VISUAL_STYLE}
 Regras Obrigatórias de Formatação:
 - Responde em ${lang === 'en' ? 'Inglês (English)' : 'Português Europeu (pt-PT)'}.
 - Não incluas blocos de código com delimitadores \`\`\`markdown no início ou fim da resposta. Devolve apenas o texto Markdown puro.
@@ -153,7 +154,7 @@ Estrutura Obrigatória:
 ## 3. Práticas, Algoritmos e Implementações Laboratoriais
 ## 4. Fórmulas, Teoremas e Definições Formais (com LaTeX $)
 ## 5. Guia de Preparação para Exames e Pontos Críticos
-
+${NOTE_VISUAL_STYLE}
 Regras:
 - Não incluas delimitadores de markdown \`\`\`markdown.
 - Nunca uses : ou / em títulos ou [[]].

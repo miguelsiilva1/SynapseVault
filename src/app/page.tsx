@@ -374,7 +374,14 @@ export default function Home() {
         options: { emailRedirectTo: `${window.location.origin}/auth/callback` },
       });
       if (error) {
-        setAuthMessage(error.message);
+        const rateLimited = error.status === 429 || /rate limit/i.test(error.message);
+        setAuthMessage(
+          rateLimited
+            ? outputLanguage === 'pt'
+              ? 'Limite de emails atingido. Tenta outra vez dentro de uma hora, ou entra com Google ou GitHub.'
+              : 'Email limit reached. Try again in an hour, or sign in with Google or GitHub.'
+            : error.message
+        );
       } else {
         setAuthMessage(
           outputLanguage === 'pt'

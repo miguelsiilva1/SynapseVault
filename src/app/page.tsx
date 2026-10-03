@@ -103,6 +103,8 @@ export default function Home() {
   const [authLoading, setAuthLoading] = useState(true);
   const [authEmailInput, setAuthEmailInput] = useState('');
   const [authMessage, setAuthMessage] = useState('');
+  const [authCodeSent, setAuthCodeSent] = useState(false);
+  const [authCodeInput, setAuthCodeInput] = useState('');
 
   // Personal History State (Categorized by Course)
   const [personalNotes, setPersonalNotes] = useState<PersonalNoteRecord[]>([]);
@@ -383,14 +385,39 @@ export default function Home() {
             : error.message
         );
       } else {
+        setAuthCodeSent(true);
         setAuthMessage(
           outputLanguage === 'pt'
-            ? 'Link de acesso enviado! Verifica a tua caixa de correio.'
-            : 'Magic sign-in link dispatched. Check your inbox.'
+            ? 'Email enviado. Escreve aqui o código que recebeste (vê também o lixo/spam).'
+            : 'Email sent. Type the code you received here (check spam too).'
         );
       }
     } catch (err) {
       setAuthMessage(err instanceof Error ? err.message : 'OTP dispatch failed.');
+    }
+  };
+
+  // The emailed code works on any device and survives mail scanners that open links.
+  const handleVerifyCode = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const token = authCodeInput.replace(/\D/g, '');
+    if (!token) return;
+    try {
+      const supabase = createClient();
+      const { error } = await supabase.auth.verifyOtp({
+        email: authEmailInput.trim(),
+        token,
+        type: 'email',
+      });
+      if (error) {
+        setAuthMessage(
+          outputLanguage === 'pt'
+            ? 'Código errado ou expirado. Pede um novo código.'
+            : 'Wrong or expired code. Request a new one.'
+        );
+      }
+    } catch (err) {
+      setAuthMessage(err instanceof Error ? err.message : 'Code verification failed.');
     }
   };
 
@@ -960,9 +987,38 @@ $$
                 type="submit"
                 className="w-full py-2 bg-accent hover:bg-accent-hover text-xs font-medium text-on-accent rounded-xl transition-colors shadow-sm"
               >
-                {outputLanguage === 'pt' ? 'Enviar Link de Acesso' : 'Send Access Link'}
+                {authCodeSent
+                  ? outputLanguage === 'pt' ? 'Enviar novo código' : 'Send a new code'
+                  : outputLanguage === 'pt' ? 'Enviar código de acesso' : 'Send access code'}
               </button>
             </form>
+
+            {authCodeSent && (
+              <form onSubmit={handleVerifyCode} className="space-y-3 text-left">
+                <div>
+                  <label htmlFor="auth-code" className="block text-xs font-medium text-ink-soft mb-1">
+                    {outputLanguage === 'pt' ? 'Código do email' : 'Code from the email'}
+                  </label>
+                  <input
+                    id="auth-code"
+                    type="text"
+                    inputMode="numeric"
+                    autoComplete="one-time-code"
+                    placeholder="123456"
+                    value={authCodeInput}
+                    onChange={(e) => setAuthCodeInput(e.target.value)}
+                    className="w-full bg-surface border border-line-strong rounded-xl px-3.5 py-2 text-sm tracking-widest text-ink focus:outline-none focus:ring-2 focus:ring-accent"
+                    required
+                  />
+                </div>
+                <button
+                  type="submit"
+                  className="w-full py-2 bg-brand hover:brightness-110 text-xs font-medium text-on-accent rounded-xl transition-all cursor-pointer"
+                >
+                  {outputLanguage === 'pt' ? 'Entrar' : 'Sign in'}
+                </button>
+              </form>
+            )}
           </div>
         </main>
       ) : (

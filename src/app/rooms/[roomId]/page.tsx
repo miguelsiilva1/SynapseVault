@@ -36,6 +36,7 @@ import {
   CheckSquare,
   MessageSquare,
   ArrowRight,
+  ExternalLink,
 } from 'lucide-react';
 import { createClient } from '@/lib/supabase/client';
 import AppHeader from '@/components/AppHeader';
@@ -1607,6 +1608,15 @@ export default function RoomWorkspacePage({
                   : 'Multiplayer Workspace'}
               </p>
             </div>
+            <a
+              href="https://isep.neru.sh/"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="ml-4 flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-line text-xs font-medium text-ink-soft hover:bg-raised transition-colors"
+            >
+              <ExternalLink className="w-3.5 h-3.5" />
+              <span>isep.neru.sh</span>
+            </a>
           </div>
         </div>
 

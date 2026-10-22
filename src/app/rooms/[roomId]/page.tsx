@@ -37,9 +37,11 @@ import {
   MessageSquare,
   ArrowRight,
   ExternalLink,
+  ListChecks,
 } from 'lucide-react';
 import { createClient } from '@/lib/supabase/client';
 import AppHeader from '@/components/AppHeader';
+import WeekQuizPanel from '@/components/WeekQuizPanel';
 import { detectWeekFromTitle } from '@/lib/utils/weekDetection';
 import type {
   StudyRoomRecord,
@@ -92,8 +94,8 @@ export default function RoomWorkspacePage({
   // Selected Folder State
   const [selectedFolderId, setSelectedFolderId] = useState<string | null>(null);
 
-  // Course / Section View Tab: 'master' | 'weeks' | 'notes'
-  const [activeCourseTab, setActiveCourseTab] = useState<'master' | 'weeks' | 'notes'>('master');
+  // Course / Section View Tab: 'master' | 'weeks' | 'quiz' | 'notes'
+  const [activeCourseTab, setActiveCourseTab] = useState<'master' | 'weeks' | 'quiz' | 'notes'>('master');
 
   // Course Syllabus (Home Page of Teóricas) State
   const [showSyllabusModal, setShowSyllabusModal] = useState(false);
@@ -193,7 +195,7 @@ export default function RoomWorkspacePage({
         setExpandedFolders(JSON.parse(savedFolders));
       }
       const savedCourseTab = localStorage.getItem(`synapse_room_${roomId}_course_tab`);
-      if (savedCourseTab && ['master', 'weeks', 'notes'].includes(savedCourseTab)) {
+      if (savedCourseTab && ['master', 'weeks', 'quiz', 'notes'].includes(savedCourseTab)) {
         setActiveCourseTab(savedCourseTab as typeof activeCourseTab);
       }
       const savedProjTab = localStorage.getItem(`synapse_room_${roomId}_project_tab`);
@@ -2746,6 +2748,20 @@ export default function RoomWorkspacePage({
                       </button>
                     )}
 
+                    {isTeoricasRoot && (
+                      <button
+                        onClick={() => setActiveCourseTab('quiz')}
+                        className={`px-3 py-1 rounded-md font-semibold transition-all cursor-pointer flex items-center space-x-1.5 ${
+                          activeCourseTab === 'quiz'
+                            ? 'bg-accent text-on-accent shadow-sm'
+                            : 'text-muted hover:text-ink'
+                        }`}
+                      >
+                        <ListChecks className="w-3.5 h-3.5" />
+                        <span>{outputLanguage === 'pt' ? 'Questionários' : 'Quizzes'}</span>
+                      </button>
+                    )}
+
                     <button
                       onClick={() => setActiveCourseTab('notes')}
                       className={`px-3 py-1 rounded-md font-semibold transition-all cursor-pointer flex items-center space-x-1.5 ${
@@ -3311,6 +3327,20 @@ export default function RoomWorkspacePage({
                     )}
                   </div>
                 </div>
+              )}
+
+              {/* VIEW 2b: QUESTIONÁRIOS POR SEMANA (TEÓRICAS ONLY) */}
+              {isTeoricasRoot && activeCourseTab === 'quiz' && (
+                <WeekQuizPanel
+                  key={activeFolder.id}
+                  roomId={roomId}
+                  folderId={activeFolder.id}
+                  weeks={teoricasWeekSubfolders}
+                  notes={notes}
+                  outputLanguage={outputLanguage}
+                  currentUserEmail={currentUser?.email}
+                  isOwner={isOwner}
+                />
               )}
 
               {/* VIEW 3: LECTURE NOTES TAB */}

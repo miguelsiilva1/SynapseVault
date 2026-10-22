@@ -84,6 +84,20 @@ create table if not exists public.room_project_logs (
   updated_by_email text
 );
 
+-- AI quizzes generated from selected weeks of a Teóricas folder, shared with the room
+create table if not exists public.room_quizzes (
+  id uuid primary key default gen_random_uuid(),
+  room_id uuid not null references public.study_rooms(id) on delete cascade,
+  folder_id uuid not null references public.room_folders(id) on delete cascade,
+  title text not null,
+  instructions text not null default '',
+  week_names text[] not null default '{}',
+  questions jsonb not null default '[]',
+  created_by_email text not null,
+  model_used text not null,
+  created_at timestamptz not null default now()
+);
+
 -- Access whitelist, mirrored from AUTHORIZED_EMAILS / AUTHORIZED_DOMAINS.
 -- One row per email ('friend@example.com') or per domain ('@alunos.example.pt'), lower case.
 -- Add your own email BEFORE applying the restrictive policies below, or every
@@ -117,6 +131,7 @@ create index if not exists idx_room_folders_parent on public.room_folders(parent
 create index if not exists idx_room_notes_folder on public.room_notes(folder_id);
 create index if not exists idx_room_notes_room on public.room_notes(room_id);
 create index if not exists idx_room_master_folder on public.room_master_summaries(folder_id);
+create index if not exists idx_room_quizzes_folder on public.room_quizzes(folder_id, created_at desc);
 create index if not exists idx_ai_usage_user_created on public.ai_usage(user_email, created_at desc);
 
 -- Triggers
@@ -143,6 +158,7 @@ alter table public.room_folders enable row level security;
 alter table public.room_notes enable row level security;
 alter table public.room_master_summaries enable row level security;
 alter table public.room_project_logs enable row level security;
+alter table public.room_quizzes enable row level security;
 
 -- No policies on these two: only the service role (which bypasses RLS) can read or write them
 alter table public.allowed_emails enable row level security;
@@ -170,7 +186,8 @@ declare
 begin
   foreach t in array array[
     'courses', 'notes', 'study_rooms', 'room_members',
-    'room_folders', 'room_notes', 'room_master_summaries', 'room_project_logs'
+    'room_folders', 'room_notes', 'room_master_summaries', 'room_project_logs',
+    'room_quizzes'
   ] loop
     execute format('drop policy if exists "Whitelisted users only" on public.%I', t);
     execute format(
@@ -293,6 +310,24 @@ drop policy if exists "Authenticated users can manage project logs" on public.ro
 drop policy if exists "Members can manage project logs" on public.room_project_logs;
 create policy "Members can manage project logs" on public.room_project_logs for all to authenticated
   using (public.is_room_member(room_id)) with check (public.is_room_member(room_id));
+
+-- Policies: Room Quizzes
+-- No update policy: quizzes are immutable once generated
+drop policy if exists "Members can manage room quizzes" on public.room_quizzes;
+drop policy if exists "Members can read room quizzes" on public.room_quizzes;
+create policy "Members can read room quizzes" on public.room_quizzes for select to authenticated
+  using (public.is_room_member(room_id));
+
+drop policy if exists "Members can create own quizzes" on public.room_quizzes;
+create policy "Members can create own quizzes" on public.room_quizzes for insert to authenticated
+  with check (public.is_room_member(room_id) and created_by_email = lower(auth.jwt() ->> 'email'));
+
+drop policy if exists "Creator or owner can delete quizzes" on public.room_quizzes;
+create policy "Creator or owner can delete quizzes" on public.room_quizzes for delete to authenticated
+  using (
+    public.is_room_member(room_id)
+    and (created_by_email = lower(auth.jwt() ->> 'email') or public.is_room_owner(room_id))
+  );
 
 -- Seed Data
 insert into public.courses (name, code) values

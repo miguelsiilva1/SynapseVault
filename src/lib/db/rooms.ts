@@ -1239,3 +1239,148 @@ export async function deleteRoomNote(params: {
     return { error: 'Falha ao eliminar nota.' };
   }
 }
+
+export interface QuizQuestion {
+  type: 'mcq' | 'open';
+  week?: string;
+  question: string;
+  options?: string[];
+  correctIndex?: number;
+  answer: string;
+  explanation?: string;
+}
+
+export interface RoomQuizRecord {
+  id: string;
+  room_id: string;
+  folder_id: string;
+  title: string;
+  instructions: string;
+  week_names: string[];
+  questions: QuizQuestion[];
+  created_by_email: string;
+  model_used: string;
+  created_at: string;
+}
+
+/**
+ * Lists the quizzes of a Teóricas folder, newest first.
+ * Call verifyRoomFolderAccess first.
+ */
+export async function listFolderQuizzes(
+  folderId: string
+): Promise<{ quizzes: RoomQuizRecord[]; error?: string }> {
+  try {
+    const supabase = (await createServerSupabaseClient()) || createAdminSupabaseClient();
+    if (!supabase) return { quizzes: [], error: 'Supabase unconfigured.' };
+
+    const { data, error } = await supabase
+      .from('room_quizzes')
+      .select('*')
+      .eq('folder_id', folderId)
+      .order('created_at', { ascending: false });
+
+    if (error) return { quizzes: [], error: error.message };
+    return { quizzes: data || [] };
+  } catch (err) {
+    console.warn('[Supabase DB] Error in listFolderQuizzes:', err);
+    return { quizzes: [], error: 'Failed to fetch quizzes.' };
+  }
+}
+
+/**
+ * Saves a generated quiz. Call getRoomDetails or verifyRoomFolderAccess first.
+ */
+export async function saveRoomQuiz(params: {
+  roomId: string;
+  folderId: string;
+  title: string;
+  instructions: string;
+  weekNames: string[];
+  questions: QuizQuestion[];
+  createdByEmail: string;
+  modelUsed: string;
+}): Promise<{ quiz?: RoomQuizRecord; error?: string }> {
+  try {
+    const supabase = createAdminSupabaseClient() || (await createServerSupabaseClient());
+    if (!supabase) return { error: 'Supabase unconfigured.' };
+
+    const { data, error } = await supabase
+      .from('room_quizzes')
+      .insert({
+        room_id: params.roomId,
+        folder_id: params.folderId,
+        title: params.title,
+        instructions: params.instructions,
+        week_names: params.weekNames,
+        questions: params.questions,
+        created_by_email: params.createdByEmail.trim().toLowerCase(),
+        model_used: params.modelUsed,
+      })
+      .select('*')
+      .single();
+
+    if (error) return { error: error.message };
+    return { quiz: data };
+  } catch (err) {
+    console.warn('[Supabase DB] Error in saveRoomQuiz:', err);
+    return { error: 'Failed to save quiz.' };
+  }
+}
+
+/**
+ * Deletes a quiz, checking that the user is the room owner or the quiz creator.
+ */
+export async function deleteRoomQuiz(params: {
+  roomId: string;
+  quizId: string;
+  userEmail: string;
+}): Promise<{ success?: boolean; error?: string; status?: number }> {
+  try {
+    const supabase = createAdminSupabaseClient() || (await createServerSupabaseClient());
+    if (!supabase) return { error: 'Supabase client unconfigured.', status: 500 };
+
+    const email = params.userEmail.trim().toLowerCase();
+
+    const [memberRes, quizRes, roomRes] = await Promise.all([
+      supabase
+        .from('room_members')
+        .select('role')
+        .eq('room_id', params.roomId)
+        .eq('user_email', email)
+        .maybeSingle(),
+      supabase
+        .from('room_quizzes')
+        .select('created_by_email')
+        .eq('id', params.quizId)
+        .eq('room_id', params.roomId)
+        .maybeSingle(),
+      supabase.from('study_rooms').select('owner_email').eq('id', params.roomId).maybeSingle(),
+    ]);
+
+    if (!memberRes.data) {
+      return { error: 'Acesso negado. Não és membro desta sala.', status: 403 };
+    }
+    if (!quizRes.data) {
+      return { error: 'Questionário não encontrado nesta sala.', status: 404 };
+    }
+
+    const isOwner = roomRes.data?.owner_email?.toLowerCase() === email;
+    const isCreator = quizRes.data.created_by_email?.toLowerCase() === email;
+    if (!isOwner && !isCreator) {
+      return { error: 'Sem permissão para eliminar este questionário.', status: 403 };
+    }
+
+    const { error } = await supabase
+      .from('room_quizzes')
+      .delete()
+      .eq('id', params.quizId)
+      .eq('room_id', params.roomId);
+
+    if (error) return { error: error.message, status: 500 };
+    return { success: true };
+  } catch (err) {
+    console.warn('[Supabase DB] Error in deleteRoomQuiz:', err);
+    return { error: 'Falha ao eliminar questionário.', status: 500 };
+  }
+}
